@@ -414,12 +414,44 @@ console.log("\n");
       }
     }
     
-    // Actualizar model si está configurado
-    if (process.env.OPENAI_MODEL && characterConfig.settings) {
-      if (!characterConfig.settings.model || characterConfig.settings.model !== process.env.OPENAI_MODEL) {
-        characterConfig.settings.model = process.env.OPENAI_MODEL;
-        needsUpdate = true;
-        console.log(`📝 Actualizando settings.model a '${process.env.OPENAI_MODEL}'...`);
+    // Actualizar model - CRÍTICO para Grok
+    if (characterConfig.settings) {
+      // Si se está usando Grok, asegurar que el modelo sea válido para Grok
+      const isGrok = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith('xai-');
+      
+      if (isGrok) {
+        // Modelos válidos de Grok (según documentación de xAI)
+        const validGrokModels = ['grok-beta', 'grok-2-1212', 'grok-2-vision-1212'];
+        const currentModel = characterConfig.settings.model || '';
+        const isCurrentModelValidGrok = validGrokModels.includes(currentModel);
+        
+        // Si OPENAI_MODEL está configurado y es un modelo válido de Grok, usarlo
+        if (process.env.OPENAI_MODEL && validGrokModels.includes(process.env.OPENAI_MODEL)) {
+          if (characterConfig.settings.model !== process.env.OPENAI_MODEL) {
+            characterConfig.settings.model = process.env.OPENAI_MODEL;
+            needsUpdate = true;
+            console.log(`📝 Actualizando settings.model a '${process.env.OPENAI_MODEL}' (modelo de Grok desde OPENAI_MODEL)...`);
+          }
+        } 
+        // Si el modelo actual NO es válido para Grok (incluyendo modelos de OpenAI como gpt-4o), usar un modelo por defecto
+        else if (!isCurrentModelValidGrok || currentModel.startsWith('gpt-') || currentModel === '' || currentModel.includes('grok-3')) {
+          const defaultGrokModel = 'grok-beta'; // Modelo más común y estable de Grok
+          characterConfig.settings.model = defaultGrokModel;
+          needsUpdate = true;
+          console.log(`📝 ⚠️ El modelo actual '${currentModel || '(no configurado)'}' no es válido para Grok. Actualizando a '${defaultGrokModel}'...`);
+          console.log(`   💡 Para usar otro modelo de Grok, configura OPENAI_MODEL con: grok-beta, grok-2-1212, o grok-2-vision-1212`);
+        } else {
+          // El modelo actual ya es válido, no cambiar
+          console.log(`   ✅ Modelo '${currentModel}' es válido para Grok`);
+        }
+      } 
+      // Si no es Grok pero OPENAI_MODEL está configurado, usarlo
+      else if (process.env.OPENAI_MODEL) {
+        if (characterConfig.settings.model !== process.env.OPENAI_MODEL) {
+          characterConfig.settings.model = process.env.OPENAI_MODEL;
+          needsUpdate = true;
+          console.log(`📝 Actualizando settings.model a '${process.env.OPENAI_MODEL}'...`);
+        }
       }
     }
     

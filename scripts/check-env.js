@@ -68,8 +68,21 @@ if (solanaKey) {
     console.log("   ⚠️ SOLANA_PRIVATE_KEY: Tiene comillas alrededor - PROBLEMA DETECTADO");
   }
   
+  // Limpiar la clave
+  const cleanKey = solanaKey.replace(/"/g, '').trim();
+  
+  // Verificar caracteres invisibles
+  const hasWhitespace = /\s/.test(cleanKey);
+  if (hasWhitespace) {
+    console.log("   ❌ SOLANA_PRIVATE_KEY: Contiene espacios o saltos de línea");
+    const whitespaceChars = cleanKey.match(/\s/g);
+    if (whitespaceChars) {
+      const unique = [...new Set(whitespaceChars)];
+      console.log(`      Caracteres de espacio encontrados: ${unique.map(c => `'${c.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}' (codigo: ${c.charCodeAt(0)})`).join(', ')}`);
+    }
+  }
+  
   // Validar base58
-  const cleanKey = solanaKey.replace(/"/g, '');
   if (!isValidBase58(cleanKey)) {
     console.log("   ❌ SOLANA_PRIVATE_KEY: Contiene caracteres inválidos para base58");
     // Encontrar caracteres inválidos
@@ -80,18 +93,60 @@ if (solanaKey) {
     }
   } else {
     console.log("   ✅ SOLANA_PRIVATE_KEY: Formato base58 válido");
+    
+    // Intentar decodificar con bs58 para verificar la longitud de bytes
+    try {
+      // Intentar cargar bs58 de diferentes formas (puede estar en node_modules o como dependencia de @elizaos/plugin-solana)
+      let bs58;
+      try {
+        // Intentar require (si está disponible directamente)
+        bs58 = require('bs58');
+      } catch (requireError) {
+        // Si require falla, intentar desde @solana/web3.js o @elizaos/plugin-solana
+        try {
+          const solanaWeb3 = require('@solana/web3.js');
+          bs58 = solanaWeb3.bs58 || require('bs58');
+        } catch (solanaError) {
+          throw new Error('bs58 no disponible');
+        }
+      }
+      
+      const decoded = bs58.decode(cleanKey);
+      const decodedLength = decoded.length;
+      
+      console.log(`   📊 SOLANA_PRIVATE_KEY decodificada: ${decodedLength} bytes`);
+      
+      // Una clave privada de Solana puede ser:
+      // - 32 bytes: solo la clave privada
+      // - 64 bytes: clave privada (32 bytes) + clave pública (32 bytes) concatenadas
+      if (decodedLength === 32) {
+        console.log("   ✅ SOLANA_PRIVATE_KEY: Tamaño correcto (32 bytes - solo privada)");
+      } else if (decodedLength === 64) {
+        console.log("   ✅ SOLANA_PRIVATE_KEY: Tamaño correcto (64 bytes - privada + pública)");
+      } else {
+        console.log(`   ❌ SOLANA_PRIVATE_KEY: Tamaño incorrecto después de decodificar (${decodedLength} bytes)`);
+        console.log(`      Esperado: 32 bytes (solo privada) o 64 bytes (privada + pública)`);
+        console.log(`      Esto explica el error "bad secret key size"`);
+        console.log(`   💡 SOLUCIÓN: La clave debe tener exactamente 32 o 64 bytes después de decodificar base58`);
+        console.log(`      Verifica que la clave exportada desde Phantom/Solflare sea la correcta`);
+      }
+    } catch (decodeError) {
+      if (decodeError.message === 'bs58 no disponible') {
+        console.log(`   ⚠️ SOLANA_PRIVATE_KEY: No se pudo cargar bs58 para decodificar (normal si bs58 no está instalado directamente)`);
+      } else {
+        console.log(`   ❌ SOLANA_PRIVATE_KEY: Error al decodificar con bs58: ${decodeError.message}`);
+        console.log(`      Esto puede indicar que la clave tiene caracteres inválidos o formato incorrecto`);
+        console.log(`   💡 SOLUCIÓN: Verifica que la clave no tenga espacios, saltos de línea o caracteres especiales`);
+      }
+    }
   }
   
-  // Validar longitud
+  // Validar longitud de la cadena base58
   const keyLength = cleanKey.length;
-  // Una clave privada de Solana en base58 puede ser:
-  // - 32 bytes (64 caracteres hex) = ~44 caracteres base58 (solo privada)
-  // - 64 bytes (128 caracteres hex) = ~88 caracteres base58 (privada + pública)
-  // Pero también puede variar por padding
   if (keyLength < 40 || keyLength > 100) {
     console.log(`   ⚠️ SOLANA_PRIVATE_KEY: Longitud inusual (${keyLength} chars). Esperado: 40-100 chars`);
   } else {
-    console.log(`   ✅ SOLANA_PRIVATE_KEY: Longitud parece correcta (${keyLength} chars)`);
+    console.log(`   ✅ SOLANA_PRIVATE_KEY: Longitud de cadena parece correcta (${keyLength} chars)`);
   }
 }
 

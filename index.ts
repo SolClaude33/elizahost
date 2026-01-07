@@ -169,35 +169,55 @@ async function main() {
           }
         }
         
-        const service = await createService({
+        const serviceBuilder = await createService({
           character: validatedCharacter,
           token: process.env.OPENAI_API_KEY || "",
         });
         
-        // Diagnosticar métodos disponibles en el servicio
-        console.log("\n🔍 Métodos disponibles en el servicio:");
-        const serviceMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(service)).concat(
-          Object.keys(service)
-        ).filter(name => typeof (service as any)[name] === "function" && name !== "constructor");
-        if (serviceMethods.length > 0) {
-          console.log(`   Métodos: ${serviceMethods.join(", ")}`);
-        } else {
-          console.log("   No se encontraron métodos adicionales");
+        // Diagnosticar métodos disponibles en el builder
+        console.log("\n🔍 Métodos disponibles en el service builder:");
+        const builderMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(serviceBuilder)).concat(
+          Object.keys(serviceBuilder)
+        ).filter(name => typeof (serviceBuilder as any)[name] === "function" && name !== "constructor");
+        if (builderMethods.length > 0) {
+          console.log(`   Métodos: ${builderMethods.join(", ")}`);
         }
         
-        // El servicio puede tener diferentes métodos, intentar los más comunes
-        if (typeof service.start === "function") {
-          console.log("   → Usando método: start()");
-          await service.start();
-        } else if (typeof service.run === "function") {
-          console.log("   → Usando método: run()");
-          await service.run();
-        } else if (typeof service.listen === "function") {
-          console.log(`   → Usando método: listen(${port})`);
-          await service.listen(parseInt(port));
+        // El builder tiene métodos withStart, withStop, build
+        // Necesitamos construir el servicio con build()
+        let builtService;
+        if (typeof serviceBuilder.build === "function") {
+          console.log("   → Construyendo servicio con build()...");
+          builtService = await serviceBuilder.build();
+          
+          // Diagnosticar métodos del servicio construido
+          console.log("\n🔍 Métodos disponibles en el servicio construido:");
+          const serviceMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(builtService)).concat(
+            Object.keys(builtService)
+          ).filter(name => typeof (builtService as any)[name] === "function" && name !== "constructor");
+          if (serviceMethods.length > 0) {
+            console.log(`   Métodos: ${serviceMethods.join(", ")}`);
+          }
+          
+          // Intentar iniciar el servicio construido
+          if (typeof builtService.start === "function") {
+            console.log("   → Iniciando servicio con start()...");
+            await builtService.start();
+          } else if (typeof builtService.run === "function") {
+            console.log("   → Iniciando servicio con run()...");
+            await builtService.run();
+          } else if (typeof builtService.listen === "function") {
+            console.log(`   → Iniciando servicio con listen(${port})...`);
+            await builtService.listen(parseInt(port));
+          } else {
+            console.log("   ⚠️ Servicio construido, inicio automático esperado");
+          }
         } else {
-          // Si no tiene métodos de inicio, solo loguear que está listo
-          console.log("   ⚠️ No se encontró método de inicio, servicio creado (inicio automático esperado)");
+          // Si no tiene build, tratar como servicio directo
+          builtService = serviceBuilder;
+          if (typeof builtService.start === "function") {
+            await builtService.start();
+          }
         }
         
         console.log(`\n✅ AMICA Agent iniciado correctamente en puerto ${port}`);

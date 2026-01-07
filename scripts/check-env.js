@@ -52,10 +52,15 @@ const openAIKey = (process.env.OPENAI_API_KEY || '').trim();
 if (openAIKey) {
   if (openAIKey.startsWith('"') || openAIKey.endsWith('"')) {
     console.log("   ⚠️ OPENAI_API_KEY: Tiene comillas alrededor - PROBLEMA DETECTADO");
-  } else if (!openAIKey.startsWith('xai-')) {
-    console.log("   ⚠️ OPENAI_API_KEY: No empieza con 'xai-' - Puede ser inválida");
+  } else if (!openAIKey.startsWith('xai-') && !openAIKey.startsWith('sk-')) {
+    console.log("   ⚠️ OPENAI_API_KEY: No empieza con 'xai-' (Grok) ni 'sk-' (OpenAI) - Puede ser inválida");
+  } else if (openAIKey.startsWith('xai-')) {
+    console.log("   ✅ OPENAI_API_KEY: Formato correcto para Grok (empieza con 'xai-')");
+  } else if (openAIKey.startsWith('sk-')) {
+    console.log("   ⚠️ OPENAI_API_KEY: Es una clave de OpenAI (sk-), pero necesitas Grok (xai-)");
+    console.log("   💡 Para usar Grok, obtén una API key de https://console.x.ai");
   } else {
-    console.log("   ✅ OPENAI_API_KEY: Formato parece correcto (empieza con 'xai-')");
+    console.log("   ✅ OPENAI_API_KEY: Formato parece correcto");
   }
   // Verificar caracteres invisibles
   if (openAIKey !== openAIKey.trim()) {

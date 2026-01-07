@@ -388,19 +388,47 @@ if (solanaPubKey) {
 console.log("\n");
   
   // Después de validar y convertir las variables, actualizar el archivo de personaje si es necesario
-  // Esto asegura que ElizaOS use la clave convertida incluso si lee desde settings.secrets
+  // Esto asegura que ElizaOS use los valores reales en lugar de placeholders
   const characterPath = './characters/amica-agent.json';
   try {
     const fs = await import('fs');
     const characterConfig = JSON.parse(fs.readFileSync(characterPath, 'utf-8'));
     let needsUpdate = false;
     
+    // Actualizar settings.apiKey y settings.apiBaseUrl (CRÍTICO para Grok)
+    if (process.env.OPENAI_API_KEY) {
+      if (characterConfig.settings?.apiKey === '{{OPENAI_API_KEY}}' || 
+          characterConfig.settings?.apiKey !== process.env.OPENAI_API_KEY) {
+        characterConfig.settings.apiKey = process.env.OPENAI_API_KEY;
+        needsUpdate = true;
+        console.log("📝 Actualizando settings.apiKey con valor real de OPENAI_API_KEY...");
+      }
+    }
+    
+    if (process.env.OPENAI_API_BASE_URL) {
+      if (characterConfig.settings?.apiBaseUrl === '{{OPENAI_API_BASE_URL}}' || 
+          characterConfig.settings?.apiBaseUrl !== process.env.OPENAI_API_BASE_URL) {
+        characterConfig.settings.apiBaseUrl = process.env.OPENAI_API_BASE_URL;
+        needsUpdate = true;
+        console.log("📝 Actualizando settings.apiBaseUrl con valor real de OPENAI_API_BASE_URL...");
+      }
+    }
+    
+    // Actualizar model si está configurado
+    if (process.env.OPENAI_MODEL && characterConfig.settings) {
+      if (!characterConfig.settings.model || characterConfig.settings.model !== process.env.OPENAI_MODEL) {
+        characterConfig.settings.model = process.env.OPENAI_MODEL;
+        needsUpdate = true;
+        console.log(`📝 Actualizando settings.model a '${process.env.OPENAI_MODEL}'...`);
+      }
+    }
+    
     // Actualizar SOLANA_PRIVATE_KEY en settings.secrets si está presente
-    if (characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY) {
+    if (characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY && process.env.SOLANA_PRIVATE_KEY) {
       const currentValue = characterConfig.settings.secrets.SOLANA_PRIVATE_KEY;
       // Solo actualizar si es un placeholder o si la longitud no coincide con la clave convertida
       if (currentValue === '{{SOLANA_PRIVATE_KEY}}' || 
-          (currentValue !== process.env.SOLANA_PRIVATE_KEY && process.env.SOLANA_PRIVATE_KEY)) {
+          (currentValue !== process.env.SOLANA_PRIVATE_KEY)) {
         characterConfig.settings.secrets.SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
         needsUpdate = true;
         console.log("📝 Actualizando archivo de personaje con SOLANA_PRIVATE_KEY convertida...");
@@ -417,9 +445,30 @@ console.log("\n");
       }
     }
     
+    // Actualizar otros secrets si están presentes
+    if (process.env.OPENAI_API_KEY && characterConfig.settings?.secrets?.OPENAI_API_KEY) {
+      if (characterConfig.settings.secrets.OPENAI_API_KEY === '{{OPENAI_API_KEY}}' || 
+          characterConfig.settings.secrets.OPENAI_API_KEY !== process.env.OPENAI_API_KEY) {
+        characterConfig.settings.secrets.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+        needsUpdate = true;
+        console.log("📝 Actualizando secrets.OPENAI_API_KEY...");
+      }
+    }
+    
+    if (process.env.OPENAI_API_BASE_URL && characterConfig.settings?.secrets?.OPENAI_API_BASE_URL) {
+      if (characterConfig.settings.secrets.OPENAI_API_BASE_URL === '{{OPENAI_API_BASE_URL}}' || 
+          characterConfig.settings.secrets.OPENAI_API_BASE_URL !== process.env.OPENAI_API_BASE_URL) {
+        characterConfig.settings.secrets.OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL;
+        needsUpdate = true;
+        console.log("📝 Actualizando secrets.OPENAI_API_BASE_URL...");
+      }
+    }
+    
     if (needsUpdate) {
       fs.writeFileSync(characterPath, JSON.stringify(characterConfig, null, 2), 'utf-8');
-      console.log("✅ Archivo de personaje actualizado correctamente\n");
+      console.log("✅ Archivo de personaje actualizado correctamente con valores reales\n");
+    } else {
+      console.log("ℹ️ Archivo de personaje ya tiene los valores correctos\n");
     }
   } catch (charUpdateError) {
     console.log(`⚠️ No se pudo actualizar el archivo de personaje: ${charUpdateError.message}`);

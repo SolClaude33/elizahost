@@ -135,7 +135,24 @@ if (solanaKey) {
       if (decodedLength === 32) {
         console.log("   ✅ SOLANA_PRIVATE_KEY: Tamaño correcto (32 bytes - solo privada)");
       } else if (decodedLength === 64) {
-        console.log("   ✅ SOLANA_PRIVATE_KEY: Tamaño correcto (64 bytes - privada + pública)");
+        console.log("   ⚠️ SOLANA_PRIVATE_KEY: Tiene 64 bytes (privada + pública concatenadas)");
+        console.log("   ⚠️ ElizaOS necesita solo 32 bytes (solo la clave privada)");
+        console.log("   💡 SOLUCIÓN: Extraer solo los primeros 32 bytes");
+        
+        try {
+          // Extraer solo los primeros 32 bytes
+          const privateKeyOnly = decoded.slice(0, 32);
+          const privateKeyBase58Only = bs58.encode(privateKeyOnly);
+          
+          console.log("\n   📋 Clave privada corregida (solo 32 bytes):");
+          console.log(`   ${privateKeyBase58Only}`);
+          console.log("\n   📝 INSTRUCCIONES:");
+          console.log("   1. Copia la clave de arriba");
+          console.log("   2. En Railway, actualiza SOLANA_PRIVATE_KEY con esta nueva clave");
+          console.log("   3. Esta clave tiene solo 32 bytes (solo la privada, sin la pública)");
+        } catch (extractError) {
+          console.log(`   ⚠️ No se pudo extraer la clave privada: ${extractError.message}`);
+        }
       } else {
         console.log(`   ❌ SOLANA_PRIVATE_KEY: Tamaño incorrecto después de decodificar (${decodedLength} bytes)`);
         console.log(`      Esperado: 32 bytes (solo privada) o 64 bytes (privada + pública)`);

@@ -9,7 +9,8 @@
     "start:manual": "tsx index.ts",
     "dev": "elizaos dev",
     "build": "node scripts/copy-assets.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "extract-solana-key": "node scripts/extract-solana-private-key.js"
   },
   "keywords": [
     "elizaos",

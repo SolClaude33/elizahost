@@ -26,7 +26,8 @@
     "@elizaos/plugin-solana": "latest",
     "@elizaos/plugin-twitter": "latest",
     "@elizaos/plugin-openai": "latest",
-    "@elizaos/cli": "latest"
+    "@elizaos/cli": "latest",
+    "bs58": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

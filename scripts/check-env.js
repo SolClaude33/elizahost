@@ -130,63 +130,85 @@ if (solanaKey) {
       console.log(`   📊 SOLANA_PRIVATE_KEY decodificada: ${decodedLength} bytes`);
       
       // Una clave privada de Solana puede ser:
-      // - 32 bytes: solo la clave privada
+      // - 32 bytes: solo la clave privada (seed)
       // - 64 bytes: clave privada (32 bytes) + clave pública (32 bytes) concatenadas
       if (decodedLength === 32) {
-        console.log("   ✅ SOLANA_PRIVATE_KEY: Tamaño correcto (32 bytes - solo privada)");
+        console.log("   ✅ SOLANA_PRIVATE_KEY: Tiene 32 bytes (solo privada/seed)");
+        console.log("   ⚠️ ElizaOS probablemente espera 64 bytes (privada + pública concatenadas)");
+        console.log("   💡 SOLUCIÓN: Convertir a formato de 64 bytes");
         
-        // Verificar correspondencia con clave pública
-        const solanaPubKey = (process.env.SOLANA_PUBLIC_KEY || '').trim();
-        if (solanaPubKey) {
-          try {
-            const { Keypair } = await import('@solana/web3.js');
-            // Keypair.fromSecretKey() espera 64 bytes (privada + pública)
-            // Si tenemos solo 32 bytes (privada), necesitamos generar el par completo
-            // Usamos Keypair.fromSeed() que acepta 32 bytes y genera el par completo
-            const keypair = Keypair.fromSeed(decoded);
+        try {
+          const { Keypair } = await import('@solana/web3.js');
+          // Generar el keypair completo desde el seed de 32 bytes
+          const keypair = Keypair.fromSeed(decoded);
+          
+          // Crear el array de 64 bytes: privada (32) + pública (32)
+          const secretKey = new Uint8Array(64);
+          secretKey.set(keypair.secretKey.slice(0, 32), 0);  // Privada
+          secretKey.set(keypair.publicKey.toBytes(), 32);     // Pública
+          
+          // Convertir a base58
+          const secretKey64Bytes = bs58.encode(secretKey);
+          
+          console.log("\n   📋 Clave privada en formato 64 bytes (para ElizaOS):");
+          console.log(`   ${secretKey64Bytes}`);
+          console.log("\n   📋 Clave pública derivada:");
+          console.log(`   ${keypair.publicKey.toBase58()}`);
+          console.log("\n   📝 INSTRUCCIONES:");
+          console.log("   1. Copia la clave de 64 bytes de arriba");
+          console.log("   2. En Railway, actualiza SOLANA_PRIVATE_KEY con esta nueva clave");
+          console.log("   3. También actualiza SOLANA_PUBLIC_KEY con la clave pública derivada");
+          
+          // Verificar correspondencia si hay clave pública configurada
+          const solanaPubKey = (process.env.SOLANA_PUBLIC_KEY || '').trim();
+          if (solanaPubKey) {
+            const cleanPubKey = solanaPubKey.replace(/"/g, '').trim();
             const derivedPublicKey = keypair.publicKey.toBase58();
+            
+            if (derivedPublicKey === cleanPubKey) {
+              console.log("   ✅ La clave pública configurada coincide con la derivada");
+            } else {
+              console.log("\n   ⚠️ ADVERTENCIA: La clave pública configurada NO coincide");
+              console.log(`   📋 Clave pública configurada:  ${cleanPubKey}`);
+              console.log(`   📋 Clave pública derivada:     ${derivedPublicKey}`);
+              console.log("   💡 Actualiza SOLANA_PUBLIC_KEY con la clave pública derivada de arriba");
+            }
+          }
+        } catch (convertError) {
+          console.log(`   ⚠️ Error al convertir clave: ${convertError.message}`);
+        }
+      } else if (decodedLength === 64) {
+        console.log("   ✅ SOLANA_PRIVATE_KEY: Tiene 64 bytes (privada + pública concatenadas)");
+        console.log("   ✅ Este es el formato que ElizaOS debería aceptar");
+        
+        try {
+          const { Keypair } = await import('@solana/web3.js');
+          // Probar que la clave de 64 bytes funciona
+          const keypair = Keypair.fromSecretKey(decoded);
+          const derivedPublicKey = keypair.publicKey.toBase58();
+          
+          console.log("   ✅ La clave de 64 bytes es válida y funciona correctamente");
+          console.log(`   📋 Clave pública derivada: ${derivedPublicKey}`);
+          
+          // Verificar correspondencia con clave pública configurada
+          const solanaPubKey = (process.env.SOLANA_PUBLIC_KEY || '').trim();
+          if (solanaPubKey) {
             const cleanPubKey = solanaPubKey.replace(/"/g, '').trim();
             
             if (derivedPublicKey === cleanPubKey) {
               console.log("   ✅ SOLANA_PRIVATE_KEY corresponde a SOLANA_PUBLIC_KEY");
             } else {
-              console.log("\n   ❌ PROBLEMA: SOLANA_PRIVATE_KEY NO corresponde a SOLANA_PUBLIC_KEY");
+              console.log("\n   ⚠️ ADVERTENCIA: La clave pública configurada NO coincide");
               console.log(`   📋 Clave pública configurada:  ${cleanPubKey}`);
               console.log(`   📋 Clave pública derivada:     ${derivedPublicKey}`);
               console.log("\n   💡 SOLUCIÓN:");
               console.log("   Actualiza SOLANA_PUBLIC_KEY en Railway con:");
               console.log(`   ${derivedPublicKey}`);
-              console.log("\n   Esta es la clave pública correcta que corresponde a tu clave privada.");
-            }
-          } catch (verifyError) {
-            if (verifyError.message.includes('Cannot find module')) {
-              console.log("   ⚠️ No se pudo verificar correspondencia (falta @solana/web3.js)");
-            } else if (verifyError.message.includes('bad secret key size')) {
-              console.log("   ⚠️ La clave privada tiene 32 bytes pero ElizaOS espera un formato diferente");
-              console.log("   💡 Esto explica el error 'bad secret key size' en ElizaOS");
-            } else {
-              console.log(`   ⚠️ Error al verificar correspondencia: ${verifyError.message}`);
             }
           }
-        }
-      } else if (decodedLength === 64) {
-        console.log("   ⚠️ SOLANA_PRIVATE_KEY: Tiene 64 bytes (privada + pública concatenadas)");
-        console.log("   ⚠️ ElizaOS necesita solo 32 bytes (solo la clave privada)");
-        console.log("   💡 SOLUCIÓN: Extraer solo los primeros 32 bytes");
-        
-        try {
-          // Extraer solo los primeros 32 bytes
-          const privateKeyOnly = decoded.slice(0, 32);
-          const privateKeyBase58Only = bs58.encode(privateKeyOnly);
-          
-          console.log("\n   📋 Clave privada corregida (solo 32 bytes):");
-          console.log(`   ${privateKeyBase58Only}`);
-          console.log("\n   📝 INSTRUCCIONES:");
-          console.log("   1. Copia la clave de arriba");
-          console.log("   2. En Railway, actualiza SOLANA_PRIVATE_KEY con esta nueva clave");
-          console.log("   3. Esta clave tiene solo 32 bytes (solo la privada, sin la pública)");
-        } catch (extractError) {
-          console.log(`   ⚠️ No se pudo extraer la clave privada: ${extractError.message}`);
+        } catch (testError) {
+          console.log(`   ❌ Error al validar clave de 64 bytes: ${testError.message}`);
+          console.log("   💡 Esto explica el error 'bad secret key size' en ElizaOS");
         }
       } else {
         console.log(`   ❌ SOLANA_PRIVATE_KEY: Tamaño incorrecto después de decodificar (${decodedLength} bytes)`);

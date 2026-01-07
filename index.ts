@@ -83,10 +83,16 @@ async function main() {
           token: process.env.OPENAI_API_KEY || "",
         });
         
-        // Intentar configurar el puerto si el builder tiene un método para eso
+        // Intentar configurar el puerto y otros parámetros si el builder tiene métodos para eso
         if (typeof (serviceBuilder as any).withPort === "function") {
           console.log(`   → Configurando puerto ${port}...`);
           serviceBuilder = (serviceBuilder as any).withPort(parseInt(port));
+        }
+        
+        // Intentar configurar el start method si existe
+        if (typeof (serviceBuilder as any).withStart === "function") {
+          console.log(`   → Configurando método de inicio...`);
+          serviceBuilder = (serviceBuilder as any).withStart();
         }
         
         // El builder tiene métodos withStart, withStop, build
@@ -103,32 +109,54 @@ async function main() {
           }
           
           // Intentar iniciar el servicio construido
-          try {
-            if (typeof builtService.start === "function") {
-              console.log("   → Iniciando servicio con start()...");
-              await builtService.start();
-              console.log(`   ✅ Servicio iniciado en puerto ${port}`);
-            } else if (typeof builtService.run === "function") {
-              console.log("   → Iniciando servicio con run()...");
-              await builtService.run();
-              console.log(`   ✅ Servicio iniciado con run()`);
-            } else if (typeof builtService.listen === "function") {
-              console.log(`   → Iniciando servicio con listen(${port})...`);
-              await builtService.listen(parseInt(port));
-              console.log(`   ✅ Servicio escuchando en puerto ${port}`);
-            } else {
-              console.log("   ⚠️ Servicio construido (inicio automático o requiere configuración adicional)");
-              // Mantener el proceso vivo
-              setInterval(() => {}, 1000);
+          // Primero verificar si hay un método estático start() en elizacore que acepte el servicio
+          const startFunction = (elizaCore as any).start;
+          let startSucceeded = false;
+          
+          if (typeof startFunction === "function") {
+            try {
+              console.log("   → Intentando método estático start() de ElizaOS...");
+              // El método estático start() puede esperar el servicio como parámetro
+              await startFunction(builtService);
+              console.log(`   ✅ Servicio iniciado con método estático en puerto ${port}`);
+              startSucceeded = true;
+            } catch (staticStartError: any) {
+              console.warn(`   ⚠️ Método estático start() falló: ${staticStartError.message}`);
             }
-          } catch (startError: any) {
-            console.error(`   ❌ Error al iniciar servicio: ${startError.message}`);
-            console.error(`   Tipo: ${startError.constructor?.name || typeof startError}`);
-            if (startError.stack) {
-              console.error(`   Stack: ${startError.stack.split("\n").slice(0, 3).join("\n")}`);
+          }
+          
+          // Si el método estático no funcionó, intentar métodos de instancia
+          if (!startSucceeded) {
+            try {
+              if (typeof builtService.start === "function") {
+                console.log("   → Intentando método de instancia start()...");
+                await builtService.start();
+                console.log(`   ✅ Servicio iniciado en puerto ${port}`);
+                startSucceeded = true;
+              } else if (typeof builtService.run === "function") {
+                console.log("   → Intentando método run()...");
+                await builtService.run();
+                console.log(`   ✅ Servicio iniciado con run()`);
+                startSucceeded = true;
+              } else if (typeof builtService.listen === "function") {
+                console.log(`   → Intentando método listen(${port})...`);
+                await builtService.listen(parseInt(port));
+                console.log(`   ✅ Servicio escuchando en puerto ${port}`);
+                startSucceeded = true;
+              }
+            } catch (startError: any) {
+              console.error(`   ❌ Error al iniciar servicio: ${startError.message}`);
+              console.error(`   Tipo: ${startError.constructor?.name || typeof startError}`);
+              if (startError.stack) {
+                console.error(`   Stack: ${startError.stack.split("\n").slice(0, 5).join("\n")}`);
+              }
+              startSucceeded = false;
             }
-            // Si falla el inicio, mantener el proceso vivo de todas formas para diagnóstico
-            console.log("   ⚠️ Manteniendo proceso vivo para diagnóstico...");
+          }
+          
+          if (!startSucceeded) {
+            console.log("   ⚠️ Servicio construido pero no se pudo iniciar (manteniendo proceso vivo)...");
+            // Mantener el proceso vivo para diagnóstico
             setInterval(() => {}, 1000);
           }
         } else {

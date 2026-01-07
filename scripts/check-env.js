@@ -206,6 +206,19 @@ if (solanaKey) {
               console.log(`   ${derivedPublicKey}`);
             }
           }
+          
+          // IMPORTANTE: ElizaOS podría necesitar solo los primeros 32 bytes (seed)
+          console.log("\n   ⚠️ NOTA: Si ElizaOS sigue dando 'bad secret key size', prueba con solo 32 bytes (seed)");
+          console.log("   💡 ElizaOS puede esperar solo el seed, no los 64 bytes completos");
+          
+          const seedOnly = decoded.slice(0, 32);
+          const seedBase58 = bs58.encode(seedOnly);
+          
+          console.log(`\n   📋 Clave privada alternativa (solo seed de 32 bytes):`);
+          console.log(`   ${seedBase58}`);
+          console.log(`   📋 Clave pública correspondiente: ${derivedPublicKey}`);
+          console.log(`\n   📝 Si el error persiste, actualiza SOLANA_PRIVATE_KEY en Railway con esta clave de 32 bytes`);
+          
         } catch (testError) {
           console.log(`   ❌ Error al validar clave de 64 bytes: ${testError.message}`);
           console.log("   💡 Esto explica el error 'bad secret key size' en ElizaOS");

@@ -134,6 +134,35 @@ if (solanaKey) {
       // - 64 bytes: clave privada (32 bytes) + clave pública (32 bytes) concatenadas
       if (decodedLength === 32) {
         console.log("   ✅ SOLANA_PRIVATE_KEY: Tamaño correcto (32 bytes - solo privada)");
+        
+        // Verificar correspondencia con clave pública
+        const solanaPubKey = (process.env.SOLANA_PUBLIC_KEY || '').trim();
+        if (solanaPubKey) {
+          try {
+            const { Keypair } = await import('@solana/web3.js');
+            const keypair = Keypair.fromSecretKey(decoded);
+            const derivedPublicKey = keypair.publicKey.toBase58();
+            const cleanPubKey = solanaPubKey.replace(/"/g, '').trim();
+            
+            if (derivedPublicKey === cleanPubKey) {
+              console.log("   ✅ SOLANA_PRIVATE_KEY corresponde a SOLANA_PUBLIC_KEY");
+            } else {
+              console.log("\n   ❌ PROBLEMA: SOLANA_PRIVATE_KEY NO corresponde a SOLANA_PUBLIC_KEY");
+              console.log(`   📋 Clave pública configurada:  ${cleanPubKey}`);
+              console.log(`   📋 Clave pública derivada:     ${derivedPublicKey}`);
+              console.log("\n   💡 SOLUCIÓN:");
+              console.log("   Actualiza SOLANA_PUBLIC_KEY en Railway con:");
+              console.log(`   ${derivedPublicKey}`);
+              console.log("\n   Esta es la clave pública correcta que corresponde a tu clave privada.");
+            }
+          } catch (verifyError) {
+            if (verifyError.message.includes('Cannot find module')) {
+              console.log("   ⚠️ No se pudo verificar correspondencia (falta @solana/web3.js)");
+            } else {
+              console.log(`   ⚠️ Error al verificar correspondencia: ${verifyError.message}`);
+            }
+          }
+        }
       } else if (decodedLength === 64) {
         console.log("   ⚠️ SOLANA_PRIVATE_KEY: Tiene 64 bytes (privada + pública concatenadas)");
         console.log("   ⚠️ ElizaOS necesita solo 32 bytes (solo la clave privada)");
@@ -190,36 +219,6 @@ if (solanaPubKey) {
     console.log(`   ⚠️ SOLANA_PUBLIC_KEY: Longitud inusual (${cleanPubKey.length} chars). Esperado: 44 chars`);
   } else {
     console.log("   ✅ SOLANA_PUBLIC_KEY: Formato y longitud correctos");
-  }
-}
-
-// Verificar correspondencia entre clave privada y pública
-if (solanaKey && solanaPubKey && decodedLength === 32) {
-  try {
-    const { Keypair } = await import('@solana/web3.js');
-    const privateKeyBytes = bs58.decode(cleanKey);
-    const keypair = Keypair.fromSecretKey(privateKeyBytes);
-    const derivedPublicKey = keypair.publicKey.toBase58();
-    const cleanPubKey = solanaPubKey.replace(/"/g, '').trim();
-    
-    if (derivedPublicKey === cleanPubKey) {
-      console.log("   ✅ SOLANA_PRIVATE_KEY corresponde a SOLANA_PUBLIC_KEY");
-    } else {
-      console.log("\n   ❌ PROBLEMA: SOLANA_PRIVATE_KEY NO corresponde a SOLANA_PUBLIC_KEY");
-      console.log(`   📋 Clave pública configurada:  ${cleanPubKey}`);
-      console.log(`   📋 Clave pública derivada:     ${derivedPublicKey}`);
-      console.log("\n   💡 SOLUCIÓN:");
-      console.log("   Actualiza SOLANA_PUBLIC_KEY en Railway con:");
-      console.log(`   ${derivedPublicKey}`);
-      console.log("\n   Esta es la clave pública correcta que corresponde a tu clave privada.");
-    }
-  } catch (verifyError) {
-    // Si @solana/web3.js no está disponible, solo advertir
-    if (verifyError.message.includes('Cannot find module')) {
-      console.log("   ⚠️ No se pudo verificar correspondencia (falta @solana/web3.js)");
-    } else {
-      console.log(`   ⚠️ Error al verificar correspondencia: ${verifyError.message}`);
-    }
   }
 }
 

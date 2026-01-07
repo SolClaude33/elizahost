@@ -8,13 +8,15 @@
     "allowJs": true,
     "outDir": "./dist",
     "rootDir": "./",
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types"]
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist"]

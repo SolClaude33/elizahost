@@ -1,89 +1,93 @@
-import { Client, start } from "@elizaos/core";
-import { TwitterClient } from "@elizaos/plugin-twitter";
-import { SolanaProvider } from "@elizaos/plugin-solana";
-import { OpenAIProvider } from "@elizaos/plugin-openai";
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+// ElizaOS Agent Entry Point
+// Compatible con Railway deployment
+
+import * as fs from "fs";
+import * as path from "path";
+import * as url from "url";
 
 // Obtener __dirname equivalente en ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __filename = url.fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Cargar configuración del personaje
-const characterConfig = JSON.parse(
-  readFileSync(join(__dirname, "characters/amica-agent.json"), "utf-8")
-);
-
-// Obtener variables de entorno
-const port = process.env.PORT || 3000;
-const openaiApiKey = process.env.OPENAI_API_KEY;
-const openaiApiBaseUrl = process.env.OPENAI_API_BASE_URL || "https://api.x.ai/v1";
-const openaiModel = process.env.OPENAI_MODEL || "grok-3-latest";
-
-// Configurar provider de OpenAI/Grok
-const provider = new OpenAIProvider({
-  apiKey: openaiApiKey!,
-  baseURL: openaiApiBaseUrl,
-  model: openaiModel,
-});
-
-// Configurar cliente de Twitter (si está disponible)
-let twitterClient: TwitterClient | null = null;
-if (
-  process.env.X_API_KEY &&
-  process.env.X_API_SECRET &&
-  process.env.X_ACCESS_TOKEN &&
-  process.env.X_ACCESS_SECRET
-) {
-  twitterClient = new TwitterClient({
-    apiKey: process.env.X_API_KEY,
-    apiSecret: process.env.X_API_SECRET,
-    accessToken: process.env.X_ACCESS_TOKEN,
-    accessSecret: process.env.X_ACCESS_SECRET,
-    bearerToken: process.env.X_BEARER_TOKEN,
-  });
-}
-
-// Configurar provider de Solana (si está disponible)
-let solanaProvider: SolanaProvider | null = null;
-if (
-  process.env.SOLANA_RPC_URL &&
-  process.env.SOLANA_PUBLIC_KEY &&
-  process.env.SOLANA_PRIVATE_KEY
-) {
-  solanaProvider = new SolanaProvider({
-    rpcUrl: process.env.SOLANA_RPC_URL,
-    publicKey: process.env.SOLANA_PUBLIC_KEY,
-    privateKey: process.env.SOLANA_PRIVATE_KEY,
-  });
-}
-
-// Crear cliente con configuración
-const clients: Client[] = [];
-if (twitterClient) {
-  clients.push(twitterClient);
-}
-
-// Iniciar el agente
+// Función principal
 async function main() {
-  console.log("🚀 Iniciando AMICA Agent...");
-  console.log(`📡 Puerto: ${port}`);
-  console.log(`🤖 Modelo: ${openaiModel}`);
-  console.log(`🔗 Base URL: ${openaiApiBaseUrl}`);
-  
-  await start({
-    character: characterConfig,
-    provider,
-    clients,
-    databaseAdapter: undefined, // Puedes agregar un adaptador de base de datos si es necesario
-    serverPort: parseInt(port.toString()),
-  });
+  try {
+    console.log("🚀 Iniciando AMICA Agent...");
+    
+    const port = process.env.PORT || "3000";
+    const characterPath = path.join(__dirname, "characters", "amica-agent.json");
+    
+    // Verificar que el archivo de personaje existe
+    try {
+      const characterContent = fs.readFileSync(characterPath, "utf-8");
+      console.log(`✅ Archivo de personaje encontrado: ${characterPath}`);
+    } catch (error: any) {
+      console.error(`❌ No se pudo leer el archivo de personaje: ${characterPath}`);
+      throw error;
+    }
 
-  console.log("✅ AMICA Agent iniciado correctamente!");
+    // Configurar variables de entorno para ElizaOS
+    process.env.ELIZA_CHARACTER_PATH = characterPath;
+    process.env.ELIZA_PORT = port;
+    
+    console.log(`📡 Puerto: ${port}`);
+    console.log(`🤖 Personaje: ${characterPath}`);
+    
+    // Intentar importar y usar ElizaOS
+    try {
+      console.log("📦 Cargando módulos de ElizaOS...");
+      
+      // Importación dinámica para evitar errores de compilación
+      const elizaCore = await import("@elizaos/core");
+      
+      // Cargar configuración del personaje
+      const characterConfig = JSON.parse(
+        fs.readFileSync(characterPath, "utf-8")
+      );
+      
+      // Buscar función de inicio (puede variar según versión)
+      const startFunction = (elizaCore as any).start || 
+                           (elizaCore as any).startServer || 
+                           (elizaCore as any).default?.start ||
+                           (elizaCore as any).default?.startServer ||
+                           (elizaCore as any).default;
+      
+      if (typeof startFunction === "function") {
+        console.log("✅ Función de inicio encontrada, iniciando servidor...");
+        
+        // Configurar opciones de inicio
+        const startOptions: any = {
+          character: characterConfig,
+        };
+        
+        // Agregar puerto si la función lo acepta
+        if ((elizaCore as any).startServer || startFunction.length > 1) {
+          startOptions.port = parseInt(port);
+        } else {
+          process.env.PORT = port;
+        }
+        
+        await startFunction(startOptions);
+        console.log("✅ AMICA Agent iniciado correctamente en puerto", port);
+      } else {
+        throw new Error("No se encontró función de inicio en @elizaos/core. Versiones disponibles: " + Object.keys(elizaCore).join(", "));
+      }
+    } catch (importError: any) {
+      console.error("❌ Error al cargar ElizaOS:", importError.message);
+      console.error("\n📝 Información de depuración:");
+      console.error("   Error:", importError);
+      console.error("\n💡 Soluciones sugeridas:");
+      console.error("   1. Verifica que @elizaos/core esté instalado: npm list @elizaos/core");
+      console.error("   2. Verifica que las dependencias estén correctas en package.json");
+      console.error("   3. Intenta reinstalar: npm install");
+      throw importError;
+    }
+  } catch (error: any) {
+    console.error("❌ Error fatal al iniciar el agente:");
+    console.error(error);
+    process.exit(1);
+  }
 }
 
-main().catch((error) => {
-  console.error("❌ Error al iniciar el agente:", error);
-  process.exit(1);
-});
+// Ejecutar
+main();

@@ -318,11 +318,25 @@ if (solanaKey) {
           const seedBase58 = bs58.encode(seedOnly);
           
           // Actualizar process.env para que ElizaOS use la versión de 32 bytes
+          const oldKey = process.env.SOLANA_PRIVATE_KEY;
           process.env.SOLANA_PRIVATE_KEY = seedBase58;
           
           console.log(`   ✅ SOLANA_PRIVATE_KEY actualizada automáticamente a formato de 32 bytes (seed)`);
+          console.log(`   📋 Longitud anterior: ${oldKey.length} chars → Nueva: ${seedBase58.length} chars`);
           console.log(`   📋 Clave pública correspondiente: ${derivedPublicKey}`);
           console.log(`   💡 Ahora ElizaOS usará la clave en el formato correcto que necesita`);
+          
+          // Verificar que la conversión funcionó correctamente
+          try {
+            const testDecoded = bs58.decode(seedBase58);
+            if (testDecoded.length === 32) {
+              console.log(`   ✅ Verificación: La clave convertida tiene exactamente 32 bytes`);
+            } else {
+              console.log(`   ⚠️ ADVERTENCIA: La clave convertida tiene ${testDecoded.length} bytes (esperado: 32)`);
+            }
+          } catch (verifyError) {
+            console.log(`   ⚠️ Error al verificar clave convertida: ${verifyError.message}`);
+          }
           
         } catch (testError) {
           console.log(`   ❌ Error al validar clave de 64 bytes: ${testError.message}`);
@@ -375,6 +389,14 @@ console.log("\n");
   
   // Después de validar y convertir las variables, ejecutar elizaos start
   console.log("🚀 Iniciando ElizaOS con variables de entorno validadas...\n");
+  
+  // Log final de variables críticas para debugging
+  console.log("📋 Variables finales que se pasarán a ElizaOS:");
+  console.log(`   OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 10) + '...' : 'NO CONFIGURADA'}`);
+  console.log(`   OPENAI_API_BASE_URL: ${process.env.OPENAI_API_BASE_URL || 'NO CONFIGURADA'}`);
+  console.log(`   OPENAI_BASE_URL: ${process.env.OPENAI_BASE_URL || 'NO CONFIGURADA'}`);
+  console.log(`   SOLANA_PRIVATE_KEY: ${process.env.SOLANA_PRIVATE_KEY ? process.env.SOLANA_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_PRIVATE_KEY.length} chars)` : 'NO CONFIGURADA'}`);
+  console.log(`   SOLANA_PUBLIC_KEY: ${process.env.SOLANA_PUBLIC_KEY || 'NO CONFIGURADA'}\n`);
   
   const { spawn } = await import('child_process');
   

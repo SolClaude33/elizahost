@@ -265,11 +265,47 @@ if (solanaPubKey) {
 }
 
 console.log("\n");
+  
+  // Después de validar y convertir las variables, ejecutar elizaos start
+  console.log("🚀 Iniciando ElizaOS con variables de entorno validadas...\n");
+  
+  const { spawn } = await import('child_process');
+  
+  // Ejecutar elizaos start usando npx (que encontrará el ejecutable correcto)
+  // Pasar las variables de entorno actualizadas (incluyendo SOLANA_PRIVATE_KEY convertida)
+  const elizaosProcess = spawn('npx', ['-y', 'elizaos', 'start', '--character', './characters/amica-agent.json'], {
+    stdio: 'inherit', // Heredar stdin, stdout, stderr
+    env: process.env,  // Pasar todas las variables de entorno (incluyendo SOLANA_PRIVATE_KEY actualizada)
+    cwd: process.cwd(),
+    shell: true  // Usar shell para que npx funcione correctamente
+  });
+  
+  // Manejar salida del proceso
+  elizaosProcess.on('error', (error) => {
+    console.error('❌ Error al ejecutar ElizaOS:', error);
+    process.exit(1);
+  });
+  
+  elizaosProcess.on('exit', (code) => {
+    if (code !== 0) {
+      console.error(`❌ ElizaOS terminó con código de salida ${code}`);
+      process.exit(code);
+    }
+  });
+  
+  // Manejar señales de terminación
+  process.on('SIGINT', () => {
+    elizaosProcess.kill('SIGINT');
+  });
+  
+  process.on('SIGTERM', () => {
+    elizaosProcess.kill('SIGTERM');
+  });
 }
 
 // Ejecutar función principal
 main().catch(error => {
-  console.error("Error en script de verificación:", error);
+  console.error("❌ Error en script de verificación:", error);
   process.exit(1);
 });
 

@@ -193,6 +193,36 @@ if (solanaPubKey) {
   }
 }
 
+// Verificar correspondencia entre clave privada y pública
+if (solanaKey && solanaPubKey && decodedLength === 32) {
+  try {
+    const { Keypair } = await import('@solana/web3.js');
+    const privateKeyBytes = bs58.decode(cleanKey);
+    const keypair = Keypair.fromSecretKey(privateKeyBytes);
+    const derivedPublicKey = keypair.publicKey.toBase58();
+    const cleanPubKey = solanaPubKey.replace(/"/g, '').trim();
+    
+    if (derivedPublicKey === cleanPubKey) {
+      console.log("   ✅ SOLANA_PRIVATE_KEY corresponde a SOLANA_PUBLIC_KEY");
+    } else {
+      console.log("\n   ❌ PROBLEMA: SOLANA_PRIVATE_KEY NO corresponde a SOLANA_PUBLIC_KEY");
+      console.log(`   📋 Clave pública configurada:  ${cleanPubKey}`);
+      console.log(`   📋 Clave pública derivada:     ${derivedPublicKey}`);
+      console.log("\n   💡 SOLUCIÓN:");
+      console.log("   Actualiza SOLANA_PUBLIC_KEY en Railway con:");
+      console.log(`   ${derivedPublicKey}`);
+      console.log("\n   Esta es la clave pública correcta que corresponde a tu clave privada.");
+    }
+  } catch (verifyError) {
+    // Si @solana/web3.js no está disponible, solo advertir
+    if (verifyError.message.includes('Cannot find module')) {
+      console.log("   ⚠️ No se pudo verificar correspondencia (falta @solana/web3.js)");
+    } else {
+      console.log(`   ⚠️ Error al verificar correspondencia: ${verifyError.message}`);
+    }
+  }
+}
+
 console.log("\n");
 }
 

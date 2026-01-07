@@ -387,6 +387,45 @@ if (solanaPubKey) {
 
 console.log("\n");
   
+  // Después de validar y convertir las variables, actualizar el archivo de personaje si es necesario
+  // Esto asegura que ElizaOS use la clave convertida incluso si lee desde settings.secrets
+  const characterPath = './characters/amica-agent.json';
+  try {
+    const fs = await import('fs');
+    const characterConfig = JSON.parse(fs.readFileSync(characterPath, 'utf-8'));
+    let needsUpdate = false;
+    
+    // Actualizar SOLANA_PRIVATE_KEY en settings.secrets si está presente
+    if (characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY) {
+      const currentValue = characterConfig.settings.secrets.SOLANA_PRIVATE_KEY;
+      // Solo actualizar si es un placeholder o si la longitud no coincide con la clave convertida
+      if (currentValue === '{{SOLANA_PRIVATE_KEY}}' || 
+          (currentValue !== process.env.SOLANA_PRIVATE_KEY && process.env.SOLANA_PRIVATE_KEY)) {
+        characterConfig.settings.secrets.SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
+        needsUpdate = true;
+        console.log("📝 Actualizando archivo de personaje con SOLANA_PRIVATE_KEY convertida...");
+      }
+    }
+    
+    // Actualizar SOLANA_PUBLIC_KEY en settings.secrets si está presente
+    if (characterConfig.settings?.secrets?.SOLANA_PUBLIC_KEY && process.env.SOLANA_PUBLIC_KEY) {
+      const currentValue = characterConfig.settings.secrets.SOLANA_PUBLIC_KEY;
+      if (currentValue === '{{SOLANA_PUBLIC_KEY}}' || currentValue !== process.env.SOLANA_PUBLIC_KEY) {
+        characterConfig.settings.secrets.SOLANA_PUBLIC_KEY = process.env.SOLANA_PUBLIC_KEY;
+        needsUpdate = true;
+        console.log("📝 Actualizando archivo de personaje con SOLANA_PUBLIC_KEY...");
+      }
+    }
+    
+    if (needsUpdate) {
+      fs.writeFileSync(characterPath, JSON.stringify(characterConfig, null, 2), 'utf-8');
+      console.log("✅ Archivo de personaje actualizado correctamente\n");
+    }
+  } catch (charUpdateError) {
+    console.log(`⚠️ No se pudo actualizar el archivo de personaje: ${charUpdateError.message}`);
+    console.log("   Continuando con variables de entorno solamente...\n");
+  }
+  
   // Después de validar y convertir las variables, ejecutar elizaos start
   console.log("🚀 Iniciando ElizaOS con variables de entorno validadas...\n");
   

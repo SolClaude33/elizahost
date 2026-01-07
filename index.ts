@@ -40,107 +40,15 @@ async function main() {
       // Importación dinámica para evitar errores de compilación
       const elizaCore = await import("@elizaos/core");
       
-      // Mostrar información de debug sobre APIs disponibles
-      console.log("\n🔍 DIAGNÓSTICO DE APIs DISPONIBLES:");
-      console.log("═".repeat(60));
-      
-      const availableExports = Object.keys(elizaCore);
-      console.log(`📊 Total de exportaciones encontradas: ${availableExports.length}`);
-      
-      // Verificar APIs principales
-      const keyAPIs = [
-        "AgentRuntime",
-        "ServiceBuilder", 
-        "createService",
-        "Service",
-        "parseCharacter",
-        "start",
-        "startServer"
-      ];
-      
-      console.log("\n📋 APIs Principales:");
-      const foundAPIs: any = {};
-      for (const api of keyAPIs) {
-        const exists = api in elizaCore;
-        foundAPIs[api] = exists;
-        console.log(`   ${exists ? "✅" : "❌"} ${api}: ${exists ? "DISPONIBLE" : "No disponible"}`);
-        
-        if (exists) {
-          const apiValue = (elizaCore as any)[api];
-          const apiType = typeof apiValue;
-          console.log(`      Tipo: ${apiType}`);
-          
-          if (apiType === "function" || (apiType === "object" && apiValue !== null)) {
-            // Verificar si es una clase (constructor)
-            try {
-              const isClass = apiType === "function" && apiValue.prototype && apiValue.prototype.constructor === apiValue;
-              if (isClass) {
-                console.log(`      Es una clase`);
-                const methods = Object.getOwnPropertyNames(apiValue.prototype).filter(name => name !== "constructor");
-                if (methods.length > 0) {
-                  console.log(`      Métodos: ${methods.join(", ")}`);
-                }
-              } else if (apiType === "function") {
-                console.log(`      Es una función`);
-                console.log(`      Parámetros esperados: ${apiValue.length}`);
-              } else if (apiType === "object") {
-                const staticMethods = Object.keys(apiValue).filter(key => typeof (apiValue as any)[key] === "function");
-                if (staticMethods.length > 0) {
-                  console.log(`      Métodos estáticos: ${staticMethods.join(", ")}`);
-                }
-              }
-            } catch (e) {
-              // Ignorar errores de inspección
-            }
-          }
-        }
-      }
-      
-      // Verificar variables de entorno
-      console.log("\n🔐 VARIABLES DE ENTORNO:");
-      console.log("═".repeat(60));
-      const requiredEnvVars = [
-        "OPENAI_API_KEY",
-        "OPENAI_API_BASE_URL",
-        "OPENAI_MODEL",
-        "SOLANA_RPC_URL",
-        "SOLANA_PUBLIC_KEY",
-        "SOLANA_PRIVATE_KEY",
-        "X_API_KEY",
-        "X_API_SECRET",
-        "X_ACCESS_TOKEN",
-        "X_ACCESS_SECRET"
-      ];
-      
-      const optionalEnvVars = [
-        "PORT",
-        "DAEMON_PROCESS",
-        "ELIZA_UI_ENABLE",
-        "CORS_ORIGIN",
-        "HELIUS_API_KEY",
-        "X_BEARER_TOKEN"
-      ];
-      
-      console.log("\n📌 Variables Requeridas:");
-      for (const varName of requiredEnvVars) {
-        const value = process.env[varName];
-        const isSet = value !== undefined && value !== "";
-        console.log(`   ${isSet ? "✅" : "❌"} ${varName}: ${isSet ? "CONFIGURADA" : "NO configurada"}`);
-        if (isSet && varName.includes("KEY") || varName.includes("SECRET") || varName.includes("PRIVATE")) {
-          console.log(`      Valor: ${value?.substring(0, 10)}...${value?.substring(value.length - 5)} (oculto)`);
-        } else if (isSet) {
-          console.log(`      Valor: ${value}`);
-        }
-      }
-      
-      console.log("\n📌 Variables Opcionales:");
-      for (const varName of optionalEnvVars) {
-        const value = process.env[varName];
-        const isSet = value !== undefined && value !== "";
-        console.log(`   ${isSet ? "✅" : "⚪"} ${varName}: ${isSet ? value : "No configurada"}`);
-      }
-      
-      console.log("\n" + "═".repeat(60));
+      // Verificar variables de entorno (resumen simple)
+      console.log("\n🔐 Variables de entorno:");
+      const hasOpenAI = !!process.env.OPENAI_API_KEY;
+      const hasSolana = !!(process.env.SOLANA_RPC_URL && process.env.SOLANA_PUBLIC_KEY);
+      const hasTwitter = !!(process.env.X_API_KEY && process.env.X_ACCESS_TOKEN);
+      console.log(`   OpenAI: ${hasOpenAI ? "✅" : "❌"}`);
+      console.log(`   Solana: ${hasSolana ? "✅" : "❌"}`);
+      console.log(`   Twitter: ${hasTwitter ? "✅" : "❌"}`);
+      console.log("   (Las variables aún no están configuradas)");
       
       // Cargar configuración del personaje
       const characterConfig = JSON.parse(
@@ -169,18 +77,16 @@ async function main() {
           }
         }
         
-        const serviceBuilder = await createService({
+        // Configurar el builder antes de construir
+        let serviceBuilder = await createService({
           character: validatedCharacter,
           token: process.env.OPENAI_API_KEY || "",
         });
         
-        // Diagnosticar métodos disponibles en el builder
-        console.log("\n🔍 Métodos disponibles en el service builder:");
-        const builderMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(serviceBuilder)).concat(
-          Object.keys(serviceBuilder)
-        ).filter(name => typeof (serviceBuilder as any)[name] === "function" && name !== "constructor");
-        if (builderMethods.length > 0) {
-          console.log(`   Métodos: ${builderMethods.join(", ")}`);
+        // Intentar configurar el puerto si el builder tiene un método para eso
+        if (typeof (serviceBuilder as any).withPort === "function") {
+          console.log(`   → Configurando puerto ${port}...`);
+          serviceBuilder = (serviceBuilder as any).withPort(parseInt(port));
         }
         
         // El builder tiene métodos withStart, withStop, build
@@ -188,39 +94,58 @@ async function main() {
         let builtService;
         if (typeof serviceBuilder.build === "function") {
           console.log("   → Construyendo servicio con build()...");
-          builtService = await serviceBuilder.build();
-          
-          // Diagnosticar métodos del servicio construido
-          console.log("\n🔍 Métodos disponibles en el servicio construido:");
-          const serviceMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(builtService)).concat(
-            Object.keys(builtService)
-          ).filter(name => typeof (builtService as any)[name] === "function" && name !== "constructor");
-          if (serviceMethods.length > 0) {
-            console.log(`   Métodos: ${serviceMethods.join(", ")}`);
+          try {
+            builtService = await serviceBuilder.build();
+            console.log("   ✅ Servicio construido correctamente");
+          } catch (buildError: any) {
+            console.error(`   ❌ Error al construir servicio: ${buildError.message}`);
+            throw buildError;
           }
           
           // Intentar iniciar el servicio construido
-          if (typeof builtService.start === "function") {
-            console.log("   → Iniciando servicio con start()...");
-            await builtService.start();
-          } else if (typeof builtService.run === "function") {
-            console.log("   → Iniciando servicio con run()...");
-            await builtService.run();
-          } else if (typeof builtService.listen === "function") {
-            console.log(`   → Iniciando servicio con listen(${port})...`);
-            await builtService.listen(parseInt(port));
-          } else {
-            console.log("   ⚠️ Servicio construido, inicio automático esperado");
+          try {
+            if (typeof builtService.start === "function") {
+              console.log("   → Iniciando servicio con start()...");
+              await builtService.start();
+              console.log(`   ✅ Servicio iniciado en puerto ${port}`);
+            } else if (typeof builtService.run === "function") {
+              console.log("   → Iniciando servicio con run()...");
+              await builtService.run();
+              console.log(`   ✅ Servicio iniciado con run()`);
+            } else if (typeof builtService.listen === "function") {
+              console.log(`   → Iniciando servicio con listen(${port})...`);
+              await builtService.listen(parseInt(port));
+              console.log(`   ✅ Servicio escuchando en puerto ${port}`);
+            } else {
+              console.log("   ⚠️ Servicio construido (inicio automático o requiere configuración adicional)");
+              // Mantener el proceso vivo
+              setInterval(() => {}, 1000);
+            }
+          } catch (startError: any) {
+            console.error(`   ❌ Error al iniciar servicio: ${startError.message}`);
+            console.error(`   Tipo: ${startError.constructor?.name || typeof startError}`);
+            if (startError.stack) {
+              console.error(`   Stack: ${startError.stack.split("\n").slice(0, 3).join("\n")}`);
+            }
+            // Si falla el inicio, mantener el proceso vivo de todas formas para diagnóstico
+            console.log("   ⚠️ Manteniendo proceso vivo para diagnóstico...");
+            setInterval(() => {}, 1000);
           }
         } else {
           // Si no tiene build, tratar como servicio directo
+          console.log("   ⚠️ El builder no tiene método build(), tratando como servicio directo");
           builtService = serviceBuilder;
-          if (typeof builtService.start === "function") {
-            await builtService.start();
+          try {
+            if (typeof builtService.start === "function") {
+              await builtService.start();
+            }
+          } catch (startError: any) {
+            console.error(`   ❌ Error al iniciar: ${startError.message}`);
+            setInterval(() => {}, 1000);
           }
         }
         
-        console.log(`\n✅ AMICA Agent iniciado correctamente en puerto ${port}`);
+        console.log(`\n✅ AMICA Agent configurado (puerto ${port})`);
       } else if (ServiceBuilder) {
         console.log("📦 Usando ServiceBuilder...");
         
@@ -256,20 +181,30 @@ async function main() {
         }
         
         // Intentar iniciar el servicio
-        if (service && typeof service.start === "function") {
-          console.log("   → Usando método: start()");
-          await service.start();
-        } else if (service && typeof service.run === "function") {
-          console.log("   → Usando método: run()");
-          await service.run();
-        } else if (service && typeof service.listen === "function") {
-          console.log(`   → Usando método: listen(${port})`);
-          await service.listen(parseInt(port));
-        } else {
-          console.log("   ⚠️ No se encontró método de inicio, servicio creado (inicio automático esperado)");
+        try {
+          if (service && typeof service.start === "function") {
+            console.log("   → Usando método: start()");
+            await service.start();
+            console.log(`   ✅ Servicio iniciado`);
+          } else if (service && typeof service.run === "function") {
+            console.log("   → Usando método: run()");
+            await service.run();
+            console.log(`   ✅ Servicio iniciado`);
+          } else if (service && typeof service.listen === "function") {
+            console.log(`   → Usando método: listen(${port})`);
+            await service.listen(parseInt(port));
+            console.log(`   ✅ Servicio escuchando`);
+          } else {
+            console.log("   ⚠️ No se encontró método de inicio, servicio creado");
+            setInterval(() => {}, 1000);
+          }
+        } catch (startError: any) {
+          console.error(`   ❌ Error al iniciar: ${startError.message}`);
+          console.log("   ⚠️ Manteniendo proceso vivo para diagnóstico...");
+          setInterval(() => {}, 1000);
         }
         
-        console.log(`\n✅ AMICA Agent iniciado correctamente en puerto ${port}`);
+        console.log(`\n✅ AMICA Agent configurado (puerto ${port})`);
       } else {
         // Fallback: usar AgentRuntime solo para mantener la instancia viva
         const AgentRuntime = (elizaCore as any).AgentRuntime;

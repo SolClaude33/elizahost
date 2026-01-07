@@ -1,6 +1,63 @@
 // Script para verificar variables de entorno antes de iniciar
 // Función principal async para permitir imports dinámicos
 async function main() {
+  // FUNCIÓN CRÍTICA: Limpiar comillas de todas las variables de entorno al inicio
+  // Railway a veces incluye comillas alrededor de los valores
+  function cleanEnvVar(value) {
+    if (!value) return value;
+    let cleaned = value.trim();
+    // Remover comillas simples o dobles al inicio y final
+    if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || 
+        (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+      cleaned = cleaned.slice(1, -1).trim();
+    }
+    return cleaned;
+  }
+  
+  function cleanAllEnvVars() {
+    const varsToClean = [
+      'OPENAI_API_KEY',
+      'OPENAI_API_BASE_URL',
+      'OPENAI_BASE_URL', // Variable alternativa que algunos plugins pueden usar
+      'OPENAI_MODEL',
+      'SOLANA_RPC_URL',
+      'SOLANA_PUBLIC_KEY',
+      'SOLANA_PRIVATE_KEY',
+      'HELIUS_API_KEY',
+      'TWITTER_API_KEY',
+      'TWITTER_API_SECRET_KEY',
+      'TWITTER_ACCESS_TOKEN',
+      'TWITTER_ACCESS_TOKEN_SECRET',
+      'TWITTER_BEARER_TOKEN',
+      'X_API_KEY',
+      'X_API_SECRET',
+      'X_ACCESS_TOKEN',
+      'X_ACCESS_SECRET',
+      'X_BEARER_TOKEN'
+    ];
+    
+    const cleanedVars = [];
+    varsToClean.forEach(varName => {
+      if (process.env[varName]) {
+        const original = process.env[varName];
+        const cleaned = cleanEnvVar(original);
+        if (original !== cleaned) {
+          process.env[varName] = cleaned;
+          cleanedVars.push(varName);
+        }
+      }
+    });
+    
+    if (cleanedVars.length > 0) {
+      console.log("🔧 Limpiando comillas de variables de entorno:");
+      cleanedVars.forEach(v => console.log(`   - ${v}`));
+      console.log("");
+    }
+  }
+  
+  // Limpiar variables al inicio ANTES de cualquier validación
+  cleanAllEnvVars();
+  
 console.log("\n🔍 Verificando variables de entorno de Railway...\n");
 
 const requiredVars = [
@@ -47,12 +104,18 @@ function isValidBase58(str) {
 
 console.log("\n🔍 Validación de formatos:");
 
-// Validar OpenAI API Key
-const openAIKey = (process.env.OPENAI_API_KEY || '').trim();
+// Validar y limpiar OpenAI API Key
+let openAIKey = process.env.OPENAI_API_KEY || '';
+const originalOpenAIKey = openAIKey;
+openAIKey = cleanEnvVar(openAIKey);
+
 if (openAIKey) {
-  if (openAIKey.startsWith('"') || openAIKey.endsWith('"')) {
-    console.log("   ⚠️ OPENAI_API_KEY: Tiene comillas alrededor - PROBLEMA DETECTADO");
-  } else if (!openAIKey.startsWith('xai-') && !openAIKey.startsWith('sk-')) {
+  if (originalOpenAIKey !== openAIKey) {
+    console.log("   ⚠️ OPENAI_API_KEY: Se detectaron comillas - limpiando automáticamente");
+    process.env.OPENAI_API_KEY = openAIKey; // Actualizar sin comillas
+  }
+  
+  if (!openAIKey.startsWith('xai-') && !openAIKey.startsWith('sk-')) {
     console.log("   ⚠️ OPENAI_API_KEY: No empieza con 'xai-' (Grok) ni 'sk-' (OpenAI) - Puede ser inválida");
   } else if (openAIKey.startsWith('xai-')) {
     console.log("   ✅ OPENAI_API_KEY: Formato correcto para Grok (empieza con 'xai-')");
@@ -66,21 +129,42 @@ if (openAIKey) {
   if (openAIKey !== openAIKey.trim()) {
     console.log("   ⚠️ OPENAI_API_KEY: Tiene espacios en blanco al inicio/final");
   }
+} else {
+  console.log("   ❌ OPENAI_API_KEY: NO CONFIGURADA");
 }
 
-// Validar OPENAI_API_BASE_URL para Grok
-const openAIBaseURL = (process.env.OPENAI_API_BASE_URL || '').trim();
+// Validar y limpiar OPENAI_API_BASE_URL para Grok
+// IMPORTANTE: Algunos plugins pueden usar OPENAI_BASE_URL en lugar de OPENAI_API_BASE_URL
+let openAIBaseURL = process.env.OPENAI_API_BASE_URL || process.env.OPENAI_BASE_URL || '';
+const originalOpenAIBaseURL = openAIBaseURL;
+openAIBaseURL = cleanEnvVar(openAIBaseURL);
+
 if (openAIKey && openAIKey.startsWith('xai-')) {
   // Si es una clave de Grok, verificar que la URL base sea correcta
+  if (originalOpenAIBaseURL !== openAIBaseURL) {
+    console.log("   ⚠️ OPENAI_API_BASE_URL: Se detectaron comillas - limpiando automáticamente");
+  }
+  
+  // Asegurar que ambas variables estén configuradas (algunos plugins usan una u otra)
+  const grokBaseURL = 'https://api.x.ai/v1';
   if (!openAIBaseURL) {
     console.log("   ❌ OPENAI_API_BASE_URL: NO CONFIGURADA - CRÍTICO para Grok");
     console.log("   💡 Configura OPENAI_API_BASE_URL=https://api.x.ai/v1 en Railway");
-  } else if (openAIBaseURL !== 'https://api.x.ai/v1') {
-    console.log(`   ⚠️ OPENAI_API_BASE_URL: ${openAIBaseURL} - Debería ser 'https://api.x.ai/v1' para Grok`);
+    // Configurar automáticamente para intentar que funcione
+    process.env.OPENAI_API_BASE_URL = grokBaseURL;
+    process.env.OPENAI_BASE_URL = grokBaseURL; // También configurar la alternativa
+    console.log("   🔧 Configurando automáticamente OPENAI_API_BASE_URL y OPENAI_BASE_URL a https://api.x.ai/v1");
+  } else if (openAIBaseURL !== grokBaseURL) {
+    console.log(`   ⚠️ OPENAI_API_BASE_URL: '${openAIBaseURL}' - Debería ser '${grokBaseURL}' para Grok`);
     console.log("   💡 Actualiza OPENAI_API_BASE_URL a 'https://api.x.ai/v1' en Railway");
   } else {
-    console.log("   ✅ OPENAI_API_BASE_URL: Configurada correctamente para Grok (https://api.x.ai/v1)");
+    console.log(`   ✅ OPENAI_API_BASE_URL: Configurada correctamente para Grok (${grokBaseURL})`);
   }
+  
+  // Asegurar que ambas variables estén configuradas correctamente
+  process.env.OPENAI_API_BASE_URL = grokBaseURL;
+  process.env.OPENAI_BASE_URL = grokBaseURL;
+  console.log("   ✅ Configuradas ambas variables (OPENAI_API_BASE_URL y OPENAI_BASE_URL) para compatibilidad");
 }
 
 // Validar Solana Private Key
@@ -272,15 +356,18 @@ if (solanaKey) {
 }
 
 // Validar Solana Public Key
-const solanaPubKey = (process.env.SOLANA_PUBLIC_KEY || '').trim();
+const solanaPubKey = cleanEnvVar(process.env.SOLANA_PUBLIC_KEY || '');
 if (solanaPubKey) {
-  const cleanPubKey = solanaPubKey.replace(/"/g, '');
-  if (!isValidBase58(cleanPubKey)) {
+  if (!isValidBase58(solanaPubKey)) {
     console.log("   ❌ SOLANA_PUBLIC_KEY: Contiene caracteres inválidos para base58");
-  } else if (cleanPubKey.length !== 44) {
-    console.log(`   ⚠️ SOLANA_PUBLIC_KEY: Longitud inusual (${cleanPubKey.length} chars). Esperado: 44 chars`);
+  } else if (solanaPubKey.length !== 44) {
+    console.log(`   ⚠️ SOLANA_PUBLIC_KEY: Longitud inusual (${solanaPubKey.length} chars). Esperado: 44 chars`);
   } else {
     console.log("   ✅ SOLANA_PUBLIC_KEY: Formato y longitud correctos");
+  }
+  // Asegurar que la variable está limpia
+  if (process.env.SOLANA_PUBLIC_KEY !== solanaPubKey) {
+    process.env.SOLANA_PUBLIC_KEY = solanaPubKey;
   }
 }
 

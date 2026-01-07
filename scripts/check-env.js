@@ -140,7 +140,10 @@ if (solanaKey) {
         if (solanaPubKey) {
           try {
             const { Keypair } = await import('@solana/web3.js');
-            const keypair = Keypair.fromSecretKey(decoded);
+            // Keypair.fromSecretKey() espera 64 bytes (privada + pública)
+            // Si tenemos solo 32 bytes (privada), necesitamos generar el par completo
+            // Usamos Keypair.fromSeed() que acepta 32 bytes y genera el par completo
+            const keypair = Keypair.fromSeed(decoded);
             const derivedPublicKey = keypair.publicKey.toBase58();
             const cleanPubKey = solanaPubKey.replace(/"/g, '').trim();
             
@@ -158,6 +161,9 @@ if (solanaKey) {
           } catch (verifyError) {
             if (verifyError.message.includes('Cannot find module')) {
               console.log("   ⚠️ No se pudo verificar correspondencia (falta @solana/web3.js)");
+            } else if (verifyError.message.includes('bad secret key size')) {
+              console.log("   ⚠️ La clave privada tiene 32 bytes pero ElizaOS espera un formato diferente");
+              console.log("   💡 Esto explica el error 'bad secret key size' en ElizaOS");
             } else {
               console.log(`   ⚠️ Error al verificar correspondencia: ${verifyError.message}`);
             }

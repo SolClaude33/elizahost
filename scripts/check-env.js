@@ -68,6 +68,21 @@ if (openAIKey) {
   }
 }
 
+// Validar OPENAI_API_BASE_URL para Grok
+const openAIBaseURL = (process.env.OPENAI_API_BASE_URL || '').trim();
+if (openAIKey && openAIKey.startsWith('xai-')) {
+  // Si es una clave de Grok, verificar que la URL base sea correcta
+  if (!openAIBaseURL) {
+    console.log("   ❌ OPENAI_API_BASE_URL: NO CONFIGURADA - CRÍTICO para Grok");
+    console.log("   💡 Configura OPENAI_API_BASE_URL=https://api.x.ai/v1 en Railway");
+  } else if (openAIBaseURL !== 'https://api.x.ai/v1') {
+    console.log(`   ⚠️ OPENAI_API_BASE_URL: ${openAIBaseURL} - Debería ser 'https://api.x.ai/v1' para Grok`);
+    console.log("   💡 Actualiza OPENAI_API_BASE_URL a 'https://api.x.ai/v1' en Railway");
+  } else {
+    console.log("   ✅ OPENAI_API_BASE_URL: Configurada correctamente para Grok (https://api.x.ai/v1)");
+  }
+}
+
 // Validar Solana Private Key
 const solanaKey = (process.env.SOLANA_PRIVATE_KEY || '').trim();
 if (solanaKey) {

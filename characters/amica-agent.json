@@ -52,9 +52,13 @@
     "model": "grok-3-latest",
     "temperature": 0.7,
     "maxTokens": 4096,
+    "apiKey": "{{OPENAI_API_KEY}}",
+    "apiBaseUrl": "{{OPENAI_API_BASE_URL}}",
     "secrets": {
       "SOLANA_PUBLIC_KEY": "{{SOLANA_PUBLIC_KEY}}",
-      "SOLANA_PRIVATE_KEY": "{{SOLANA_PRIVATE_KEY}}"
+      "SOLANA_PRIVATE_KEY": "{{SOLANA_PRIVATE_KEY}}",
+      "OPENAI_API_KEY": "{{OPENAI_API_KEY}}",
+      "OPENAI_API_BASE_URL": "{{OPENAI_API_BASE_URL}}"
     }
   }
 }

@@ -133,3 +133,4 @@ Si el servicio inicia pero luego falla:
 1. Ve a la pestaña "Logs"
 2. Revisa los mensajes de error
 3. Verifica que las variables de entorno estén configuradas
+

@@ -113,22 +113,34 @@ async function main() {
           console.log(`   Tipo: ${typeof builtService}`);
           console.log(`   Constructor: ${builtService?.constructor?.name || "desconocido"}`);
           
-          // Si build() devolvió una función, puede que necesite ser invocada
+          // Si build() devolvió una función, puede que necesite ser instanciada con 'new'
           let actualService = builtService;
           if (typeof builtService === "function") {
-            console.log("   ⚠️ build() devolvió una función, intentando invocarla...");
+            console.log("   ⚠️ build() devolvió una clase/función, intentando instanciarla con 'new'...");
             try {
-              // Intentar invocar la función sin parámetros
-              actualService = builtService();
+              // Intentar instanciar con 'new'
+              actualService = new builtService();
               if (typeof actualService === "object" && actualService !== null) {
-                console.log("   ✅ Función invocada, servicio obtenido");
+                console.log("   ✅ Clase instanciada, servicio obtenido");
               } else {
                 // Si no, revertir
                 actualService = builtService;
               }
-            } catch (invokeError: any) {
-              console.warn(`   ⚠️ Error al invocar función: ${invokeError.message}, usando función directamente`);
-              actualService = builtService;
+            } catch (newError: any) {
+              // Si 'new' falla, intentar invocar como función
+              try {
+                console.log("   → 'new' falló, intentando invocar como función...");
+                actualService = builtService();
+                if (typeof actualService === "object" && actualService !== null) {
+                  console.log("   ✅ Función invocada, servicio obtenido");
+                } else {
+                  actualService = builtService;
+                }
+              } catch (invokeError: any) {
+                console.warn(`   ⚠️ No se pudo instanciar ni invocar: ${invokeError.message}`);
+                console.log("   → Usando la clase/función directamente");
+                actualService = builtService;
+              }
             }
           }
           

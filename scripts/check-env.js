@@ -207,17 +207,18 @@ if (solanaKey) {
             }
           }
           
-          // IMPORTANTE: ElizaOS podría necesitar solo los primeros 32 bytes (seed)
-          console.log("\n   ⚠️ NOTA: Si ElizaOS sigue dando 'bad secret key size', prueba con solo 32 bytes (seed)");
-          console.log("   💡 ElizaOS puede esperar solo el seed, no los 64 bytes completos");
-          
+          // IMPORTANTE: ElizaOS necesita solo los primeros 32 bytes (seed)
+          // Convertir automáticamente la clave de 64 bytes a 32 bytes para ElizaOS
+          console.log("\n   🔄 Convirtiendo automáticamente clave de 64 bytes a 32 bytes (seed) para ElizaOS...");
           const seedOnly = decoded.slice(0, 32);
           const seedBase58 = bs58.encode(seedOnly);
           
-          console.log(`\n   📋 Clave privada alternativa (solo seed de 32 bytes):`);
-          console.log(`   ${seedBase58}`);
+          // Actualizar process.env para que ElizaOS use la versión de 32 bytes
+          process.env.SOLANA_PRIVATE_KEY = seedBase58;
+          
+          console.log(`   ✅ SOLANA_PRIVATE_KEY actualizada automáticamente a formato de 32 bytes (seed)`);
           console.log(`   📋 Clave pública correspondiente: ${derivedPublicKey}`);
-          console.log(`\n   📝 Si el error persiste, actualiza SOLANA_PRIVATE_KEY en Railway con esta clave de 32 bytes`);
+          console.log(`   💡 Ahora ElizaOS usará la clave en el formato correcto que necesita`);
           
         } catch (testError) {
           console.log(`   ❌ Error al validar clave de 64 bytes: ${testError.message}`);

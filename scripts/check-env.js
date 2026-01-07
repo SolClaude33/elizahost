@@ -1,4 +1,6 @@
 // Script para verificar variables de entorno antes de iniciar
+// Función principal async para permitir imports dinámicos
+async function main() {
 console.log("\n🔍 Verificando variables de entorno de Railway...\n");
 
 const requiredVars = [
@@ -96,16 +98,27 @@ if (solanaKey) {
     
     // Intentar decodificar con bs58 para verificar la longitud de bytes
     try {
-      // Intentar cargar bs58 de diferentes formas (puede estar en node_modules o como dependencia de @elizaos/plugin-solana)
+      // Intentar cargar bs58 (ESM import dinámico)
       let bs58;
       try {
-        // Intentar require (si está disponible directamente)
-        bs58 = require('bs58');
-      } catch (requireError) {
-        // Si require falla, intentar desde @solana/web3.js o @elizaos/plugin-solana
+        // Como el proyecto es ESM, usar import dinámico
+        const bs58Module = await import('bs58');
+        bs58 = bs58Module.default || bs58Module;
+      } catch (importError) {
+        // Si import falla, intentar desde @solana/web3.js
         try {
-          const solanaWeb3 = require('@solana/web3.js');
-          bs58 = solanaWeb3.bs58 || require('bs58');
+          const solanaWeb3 = await import('@solana/web3.js');
+          bs58 = solanaWeb3.bs58 || solanaWeb3.default?.bs58;
+          if (!bs58) {
+            // Si no está disponible, intentar require como fallback (solo en CommonJS)
+            try {
+              const { createRequire } = await import('module');
+              const require = createRequire(import.meta.url);
+              bs58 = require('bs58');
+            } catch (requireError) {
+              throw new Error('bs58 no disponible');
+            }
+          }
         } catch (solanaError) {
           throw new Error('bs58 no disponible');
         }
@@ -164,4 +177,11 @@ if (solanaPubKey) {
 }
 
 console.log("\n");
+}
+
+// Ejecutar función principal
+main().catch(error => {
+  console.error("Error en script de verificación:", error);
+  process.exit(1);
+});
 

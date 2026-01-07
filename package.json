@@ -5,8 +5,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node scripts/start-with-cli.js",
-    "start:fallback": "tsx index.ts",
+    "start": "tsx index.ts",
+    "start:wrapper": "node scripts/start-with-cli.js",
     "dev": "elizaos dev",
     "build": "node scripts/copy-assets.js",
     "type-check": "tsc --noEmit"

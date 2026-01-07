@@ -45,32 +45,46 @@ async function main() {
         fs.readFileSync(characterPath, "utf-8")
       );
       
-      // Buscar función de inicio (puede variar según versión)
-      const startFunction = (elizaCore as any).start || 
-                           (elizaCore as any).startServer || 
-                           (elizaCore as any).default?.start ||
-                           (elizaCore as any).default?.startServer ||
-                           (elizaCore as any).default;
+      // Usar AgentRuntime o ServiceBuilder para iniciar el agente
+      const AgentRuntime = (elizaCore as any).AgentRuntime;
+      const ServiceBuilder = (elizaCore as any).ServiceBuilder;
+      const createService = (elizaCore as any).createService;
       
-      if (typeof startFunction === "function") {
-        console.log("✅ Función de inicio encontrada, iniciando servidor...");
-        
-        // Configurar opciones de inicio
-        const startOptions: any = {
+      if (!AgentRuntime && !ServiceBuilder && !createService) {
+        throw new Error("No se encontraron AgentRuntime, ServiceBuilder o createService en @elizaos/core. Exportaciones disponibles: " + Object.keys(elizaCore).join(", "));
+      }
+      
+      console.log("✅ Módulos de ElizaOS encontrados, iniciando servidor...");
+      
+      // Intentar usar AgentRuntime (método más común)
+      if (AgentRuntime) {
+        console.log("📦 Usando AgentRuntime...");
+        const runtime = new AgentRuntime({
           character: characterConfig,
-        };
+          token: process.env.OPENAI_API_KEY || "",
+          serverUrl: `http://0.0.0.0:${port}`,
+        });
         
-        // Agregar puerto si la función lo acepta
-        if ((elizaCore as any).startServer || startFunction.length > 1) {
-          startOptions.port = parseInt(port);
-        } else {
-          process.env.PORT = port;
-        }
+        await runtime.start();
+        console.log(`✅ AMICA Agent iniciado correctamente en puerto ${port}`);
+      } else if (ServiceBuilder) {
+        console.log("📦 Usando ServiceBuilder...");
+        const service = ServiceBuilder.create({
+          character: characterConfig,
+          port: parseInt(port),
+        });
         
-        await startFunction(startOptions);
-        console.log("✅ AMICA Agent iniciado correctamente en puerto", port);
-      } else {
-        throw new Error("No se encontró función de inicio en @elizaos/core. Versiones disponibles: " + Object.keys(elizaCore).join(", "));
+        await service.start();
+        console.log(`✅ AMICA Agent iniciado correctamente en puerto ${port}`);
+      } else if (createService) {
+        console.log("📦 Usando createService...");
+        const service = await createService({
+          character: characterConfig,
+          port: parseInt(port),
+        });
+        
+        await service.start();
+        console.log(`✅ AMICA Agent iniciado correctamente en puerto ${port}`);
       }
     } catch (importError: any) {
       console.error("❌ Error al cargar ElizaOS:", importError.message);

@@ -28,6 +28,7 @@ async function main() {
       'SOLANA_RPC_URL',
       'SOLANA_PUBLIC_KEY',
       'SOLANA_PRIVATE_KEY',
+      'SOLANA_WALLET_PRIVATE_KEY', // Alternativa soportada por ElizaOS
       'HELIUS_API_KEY',
       // Variables de Twitter
       'TWITTER_API_KEY',
@@ -383,12 +384,18 @@ if (solanaKey) {
           if (use64Bytes) {
             // Usar la clave de 64 bytes directamente
             process.env.SOLANA_PRIVATE_KEY = key64BytesBase58;
+            // También configurar SOLANA_WALLET_PRIVATE_KEY por si ElizaOS lo requiere
+            process.env.SOLANA_WALLET_PRIVATE_KEY = key64BytesBase58;
             console.log(`   ✅ SOLANA_PRIVATE_KEY configurada para usar formato de 64 bytes (formato completo)`);
+            console.log(`   ✅ SOLANA_WALLET_PRIVATE_KEY también configurada (alternativa soportada por ElizaOS)`);
             console.log(`   📋 Longitud: ${key64BytesBase58.length} chars (64 bytes decodificados)`);
           } else {
             // Usar la clave de 32 bytes (seed) - formato más común
             process.env.SOLANA_PRIVATE_KEY = seedBase58;
+            // También configurar SOLANA_WALLET_PRIVATE_KEY por si ElizaOS lo requiere
+            process.env.SOLANA_WALLET_PRIVATE_KEY = seedBase58;
             console.log(`   ✅ SOLANA_PRIVATE_KEY actualizada a formato de 32 bytes (seed)`);
+            console.log(`   ✅ SOLANA_WALLET_PRIVATE_KEY también configurada (alternativa soportada por ElizaOS)`);
             console.log(`   📋 Longitud anterior: ${oldKey.length} chars → Nueva: ${seedBase58.length} chars`);
             
             // Verificar que la conversión funcionó correctamente
@@ -420,6 +427,44 @@ if (solanaKey) {
           // Guardar ambas versiones por si acaso
           process.env.SOLANA_PRIVATE_KEY_32BYTES = seedBase58;
           process.env.SOLANA_PRIVATE_KEY_64BYTES = key64BytesBase58;
+          
+          // DIAGNÓSTICO ADICIONAL: Verificar ambas versiones con diferentes métodos de @solana/web3.js
+          console.log("\n   🔍 DIAGNÓSTICO: Probando diferentes métodos de decodificación:");
+          try {
+            const { Keypair } = await import('@solana/web3.js');
+            
+            // Probar clave de 64 bytes con Keypair.fromSecretKey
+            try {
+              const keypair64 = Keypair.fromSecretKey(decoded);
+              console.log(`   ✅ 64 bytes con Keypair.fromSecretKey(): OK (public key: ${keypair64.publicKey.toBase58().substring(0, 10)}...)`);
+            } catch (e) {
+              console.log(`   ❌ 64 bytes con Keypair.fromSecretKey(): FALLA - ${e.message}`);
+            }
+            
+            // Probar clave de 32 bytes (seed) con Keypair.fromSeed
+            try {
+              const seed32 = decoded.slice(0, 32);
+              const keypair32 = Keypair.fromSeed(seed32);
+              console.log(`   ✅ 32 bytes (seed) con Keypair.fromSeed(): OK (public key: ${keypair32.publicKey.toBase58().substring(0, 10)}...)`);
+            } catch (e) {
+              console.log(`   ❌ 32 bytes (seed) con Keypair.fromSeed(): FALLA - ${e.message}`);
+            }
+            
+            // Probar clave de 64 bytes con Keypair.fromSeed (no debería funcionar, pero verificar)
+            try {
+              const keypair64Seed = Keypair.fromSeed(decoded);
+              console.log(`   ⚠️  64 bytes con Keypair.fromSeed(): OK (pero no es el uso esperado)`);
+            } catch (e) {
+              console.log(`   ✅ 64 bytes con Keypair.fromSeed(): Falla como se espera - ${e.message.substring(0, 50)}...`);
+            }
+            
+            console.log("\n   💡 NOTA: El plugin de Solana puede usar Keypair.fromSecretKey() para 64 bytes o Keypair.fromSeed() para 32 bytes");
+            console.log("   💡 Si el error persiste, el problema podría estar en cómo el plugin lee la clave desde settings.secrets");
+            console.log(`   💡 VALOR ACTUAL configurado: ${use64Bytes ? '64 bytes (formato completo)' : '32 bytes (seed)'}`);
+            console.log(`   💡 Para cambiar, configura SOLANA_USE_64_BYTES=true o SOLANA_USE_64_BYTES=false en Railway`);
+          } catch (diagError) {
+            console.log(`   ⚠️ Error en diagnóstico: ${diagError.message}`);
+          }
           
         } catch (testError) {
           console.log(`   ❌ Error al validar clave de 64 bytes: ${testError.message}`);
@@ -563,14 +608,42 @@ console.log("\n");
     }
     
     // Actualizar SOLANA_PRIVATE_KEY en settings.secrets si está presente
-    if (characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY && process.env.SOLANA_PRIVATE_KEY) {
+    // Según la documentación de ElizaOS, puede usar SOLANA_PRIVATE_KEY o SOLANA_WALLET_PRIVATE_KEY
+    if (process.env.SOLANA_PRIVATE_KEY) {
+      const newValue = process.env.SOLANA_PRIVATE_KEY;
+      
+      // Asegurar que settings.secrets existe
+      if (!characterConfig.settings.secrets) {
+        characterConfig.settings.secrets = {};
+      }
+      
+      // Actualizar SOLANA_PRIVATE_KEY
       const currentValue = characterConfig.settings.secrets.SOLANA_PRIVATE_KEY;
-      // Solo actualizar si es un placeholder o si la longitud no coincide con la clave convertida
-      if (currentValue === '{{SOLANA_PRIVATE_KEY}}' || 
-          (currentValue !== process.env.SOLANA_PRIVATE_KEY)) {
-        characterConfig.settings.secrets.SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
+      if (currentValue === '{{SOLANA_PRIVATE_KEY}}' || currentValue !== newValue) {
+        characterConfig.settings.secrets.SOLANA_PRIVATE_KEY = newValue;
         needsUpdate = true;
         console.log("📝 Actualizando archivo de personaje con SOLANA_PRIVATE_KEY convertida...");
+        
+        // Logging detallado para debugging
+        try {
+          const bs58Module = await import('bs58');
+          const bs58 = bs58Module.default || bs58Module;
+          const decoded = bs58.decode(newValue);
+          console.log(`   📋 Valor guardado en JSON: ${newValue.substring(0, 10)}...${newValue.substring(newValue.length - 5)} (${newValue.length} chars, ${decoded.length} bytes decodificados)`);
+          console.log(`   📋 Esto es lo que el plugin de Solana leerá desde settings.secrets.SOLANA_PRIVATE_KEY`);
+        } catch (decodeError) {
+          console.log(`   ⚠️ No se pudo decodificar para verificar (esto es solo para logging)`);
+        }
+      } else {
+        console.log("   ✅ SOLANA_PRIVATE_KEY en JSON ya está actualizada");
+      }
+      
+      // También actualizar SOLANA_WALLET_PRIVATE_KEY como alternativa (según docs de ElizaOS)
+      const currentWalletKey = characterConfig.settings.secrets.SOLANA_WALLET_PRIVATE_KEY;
+      if (!currentWalletKey || currentWalletKey === '{{SOLANA_WALLET_PRIVATE_KEY}}' || currentWalletKey !== newValue) {
+        characterConfig.settings.secrets.SOLANA_WALLET_PRIVATE_KEY = newValue;
+        needsUpdate = true;
+        console.log("📝 Actualizando SOLANA_WALLET_PRIVATE_KEY en settings.secrets (alternativa soportada por ElizaOS)...");
       }
     }
     
@@ -621,6 +694,34 @@ console.log("\n");
   } catch (charUpdateError) {
     console.log(`⚠️ No se pudo actualizar el archivo de personaje: ${charUpdateError.message}`);
     console.log("   Continuando con variables de entorno solamente...\n");
+  }
+  
+  // VERIFICACIÓN FINAL: Asegurar que el archivo JSON tiene el valor correcto
+  try {
+    const fs = await import('fs');
+    const characterConfig = JSON.parse(fs.readFileSync('./characters/amica-agent.json', 'utf-8'));
+    const jsonKey = characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY;
+    
+    if (jsonKey && process.env.SOLANA_PRIVATE_KEY) {
+      if (jsonKey === process.env.SOLANA_PRIVATE_KEY) {
+        console.log("✅ VERIFICACIÓN FINAL: El archivo JSON tiene la misma clave que process.env");
+        try {
+          const bs58Module = await import('bs58');
+          const bs58 = bs58Module.default || bs58Module;
+          const decoded = bs58.decode(jsonKey);
+          console.log(`   📋 Valor en JSON: ${decoded.length} bytes decodificados (${jsonKey.length} chars en base58)`);
+          console.log(`   📋 Esto es exactamente lo que el plugin de Solana leerá desde settings.secrets.SOLANA_PRIVATE_KEY`);
+        } catch (e) {
+          // Ignorar error de decodificación para logging
+        }
+      } else {
+        console.log("⚠️ ADVERTENCIA: El archivo JSON tiene una clave diferente a process.env");
+        console.log(`   📋 JSON: ${jsonKey.substring(0, 10)}... (${jsonKey.length} chars)`);
+        console.log(`   📋 ENV:  ${process.env.SOLANA_PRIVATE_KEY.substring(0, 10)}... (${process.env.SOLANA_PRIVATE_KEY.length} chars)`);
+      }
+    }
+  } catch (verifyError) {
+    // Ignorar errores de verificación
   }
   
   // CRÍTICO: Asegurar que OPENAI_MODEL esté configurado correctamente antes de iniciar ElizaOS
@@ -675,6 +776,7 @@ console.log("\n");
   console.log(`   OPENAI_LARGE_MODEL: ${process.env.OPENAI_LARGE_MODEL || 'NO CONFIGURADA'} ⚠️ ElizaOS puede leer desde aquí`);
   console.log(`   OPENAI_SMALL_MODEL: ${process.env.OPENAI_SMALL_MODEL || 'NO CONFIGURADA'} ⚠️ ElizaOS puede leer desde aquí`);
   console.log(`   SOLANA_PRIVATE_KEY: ${process.env.SOLANA_PRIVATE_KEY ? process.env.SOLANA_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_PRIVATE_KEY.length} chars)` : 'NO CONFIGURADA'}`);
+  console.log(`   SOLANA_WALLET_PRIVATE_KEY: ${process.env.SOLANA_WALLET_PRIVATE_KEY ? process.env.SOLANA_WALLET_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_WALLET_PRIVATE_KEY.length} chars) - Alternativa soportada` : 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_PUBLIC_KEY: ${process.env.SOLANA_PUBLIC_KEY || 'NO CONFIGURADA'}\n`);
   
   const { spawn } = await import('child_process');

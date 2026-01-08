@@ -16,14 +16,20 @@ async function main() {
   
   function cleanAllEnvVars() {
     const varsToClean = [
+      // Variables específicas de XAI/Grok (prioritarias)
+      'XAI_API_KEY',
+      'XAI_MODEL',
+      // Variables genéricas de OpenAI (para compatibilidad)
       'OPENAI_API_KEY',
       'OPENAI_API_BASE_URL',
       'OPENAI_BASE_URL', // Variable alternativa que algunos plugins pueden usar
       'OPENAI_MODEL',
+      // Variables de Solana
       'SOLANA_RPC_URL',
       'SOLANA_PUBLIC_KEY',
       'SOLANA_PRIVATE_KEY',
       'HELIUS_API_KEY',
+      // Variables de Twitter
       'TWITTER_API_KEY',
       'TWITTER_API_SECRET_KEY',
       'TWITTER_ACCESS_TOKEN',
@@ -55,13 +61,51 @@ async function main() {
     }
   }
   
+  // Detectar y mapear variables específicas de XAI a OpenAI para compatibilidad
+  function setupXAIEnvVars() {
+    // Si XAI_API_KEY está configurada, tiene prioridad sobre OPENAI_API_KEY
+    if (process.env.XAI_API_KEY) {
+      console.log("🎯 Detectadas variables específicas de XAI/Grok - Usándolas con prioridad\n");
+      
+      // Mapear XAI_API_KEY a OPENAI_API_KEY para compatibilidad
+      process.env.OPENAI_API_KEY = process.env.XAI_API_KEY;
+      console.log("   ✅ XAI_API_KEY → OPENAI_API_KEY (mapeada para compatibilidad)");
+      
+      // Configurar la base URL de Grok si no está configurada
+      if (!process.env.OPENAI_API_BASE_URL) {
+        process.env.OPENAI_API_BASE_URL = 'https://api.x.ai/v1';
+        process.env.OPENAI_BASE_URL = 'https://api.x.ai/v1';
+        console.log("   ✅ Configurada OPENAI_API_BASE_URL=https://api.x.ai/v1 automáticamente");
+      }
+      
+      // Si XAI_MODEL está configurada, mapearla a OPENAI_MODEL
+      if (process.env.XAI_MODEL) {
+        process.env.OPENAI_MODEL = process.env.XAI_MODEL;
+        console.log(`   ✅ XAI_MODEL=${process.env.XAI_MODEL} → OPENAI_MODEL (mapeada)`);
+      } else {
+        // Si no hay XAI_MODEL, usar grok-beta por defecto
+        process.env.OPENAI_MODEL = 'grok-beta';
+        process.env.XAI_MODEL = 'grok-beta';
+        console.log("   ✅ Configurado modelo por defecto: grok-beta (ya que XAI_MODEL no está configurada)");
+      }
+      
+      console.log("");
+      return true; // Indica que se usaron variables de XAI
+    }
+    return false; // No hay variables específicas de XAI
+  }
+  
   // Limpiar variables al inicio ANTES de cualquier validación
   cleanAllEnvVars();
+  
+  // Configurar variables específicas de XAI si están disponibles
+  const usingXAI = setupXAIEnvVars();
   
 console.log("\n🔍 Verificando variables de entorno de Railway...\n");
 
 const requiredVars = [
-  'OPENAI_API_KEY',
+  // Verificar XAI_API_KEY primero, luego OPENAI_API_KEY como fallback
+  ...(process.env.XAI_API_KEY ? ['XAI_API_KEY'] : ['OPENAI_API_KEY']),
   'OPENAI_API_BASE_URL',
   'SOLANA_RPC_URL',
   'SOLANA_PUBLIC_KEY',
@@ -69,6 +113,8 @@ const requiredVars = [
 ];
 
 const optionalVars = [
+  'XAI_MODEL', // Modelo específico de XAI/Grok
+  'OPENAI_MODEL', // Modelo genérico (puede ser usado como fallback)
   'TWITTER_API_KEY',
   'TWITTER_API_SECRET_KEY',
   'HELIUS_API_KEY'
@@ -432,15 +478,19 @@ console.log("\n");
     const characterConfig = JSON.parse(fs.readFileSync(characterPath, 'utf-8'));
     let needsUpdate = false;
     
-    // Actualizar settings.apiKey y settings.apiBaseUrl (CRÍTICO para Grok)
-    if (process.env.OPENAI_API_KEY) {
-      if (characterConfig.settings?.apiKey === '{{OPENAI_API_KEY}}' || 
-          characterConfig.settings?.apiKey !== process.env.OPENAI_API_KEY) {
-        characterConfig.settings.apiKey = process.env.OPENAI_API_KEY;
-        needsUpdate = true;
-        console.log("📝 Actualizando settings.apiKey con valor real de OPENAI_API_KEY...");
-      }
-    }
+        // Actualizar settings.apiKey y settings.apiBaseUrl (CRÍTICO para Grok)
+        // Priorizar XAI_API_KEY si existe, sino usar OPENAI_API_KEY
+        const apiKeyToUse = process.env.XAI_API_KEY || process.env.OPENAI_API_KEY;
+        if (apiKeyToUse) {
+          if (characterConfig.settings?.apiKey === '{{OPENAI_API_KEY}}' ||
+              characterConfig.settings?.apiKey === '{{XAI_API_KEY}}' ||
+              characterConfig.settings?.apiKey !== apiKeyToUse) {
+            characterConfig.settings.apiKey = apiKeyToUse;
+            needsUpdate = true;
+            const keySource = process.env.XAI_API_KEY ? 'XAI_API_KEY' : 'OPENAI_API_KEY';
+            console.log(`📝 Actualizando settings.apiKey con valor real de ${keySource}...`);
+          }
+        }
     
     if (process.env.OPENAI_API_BASE_URL) {
       if (characterConfig.settings?.apiBaseUrl === '{{OPENAI_API_BASE_URL}}' || 
@@ -453,25 +503,29 @@ console.log("\n");
     
     // Actualizar model - CRÍTICO para Grok
     if (characterConfig.settings) {
-      // Si se está usando Grok, asegurar que el modelo sea válido para Grok
-      const isGrok = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith('xai-');
+      // Verificar si se está usando Grok/XAI (priorizar XAI_API_KEY si existe)
+      const apiKey = process.env.XAI_API_KEY || process.env.OPENAI_API_KEY;
+      const isGrok = apiKey && apiKey.startsWith('xai-');
       
       if (isGrok) {
         // Modelos válidos de Grok (según documentación de xAI)
-        const validGrokModels = ['grok-beta', 'grok-2-1212', 'grok-2-vision-1212'];
+        const validGrokModels = ['grok-beta', 'grok-2-1212', 'grok-2-vision-1212', 'grok-3-latest'];
         const currentModel = characterConfig.settings.model || '';
         const isCurrentModelValidGrok = validGrokModels.includes(currentModel);
         
-        // FORZAR actualización del modelo para Grok - no confiar en valores existentes
+        // Determinar el modelo objetivo - priorizar XAI_MODEL si existe
         let targetModel = 'grok-beta'; // Modelo por defecto
         
-        // Si OPENAI_MODEL está configurado y es válido, usarlo
-        if (process.env.OPENAI_MODEL && validGrokModels.includes(process.env.OPENAI_MODEL)) {
+        if (process.env.XAI_MODEL && validGrokModels.includes(process.env.XAI_MODEL)) {
+          targetModel = process.env.XAI_MODEL;
+          console.log(`📝 Usando XAI_MODEL=${targetModel} (variable específica de XAI)`);
+        } else if (process.env.OPENAI_MODEL && validGrokModels.includes(process.env.OPENAI_MODEL)) {
           targetModel = process.env.OPENAI_MODEL;
+          console.log(`📝 Usando OPENAI_MODEL=${targetModel} (variable genérica)`);
         }
         
         // SIEMPRE actualizar el modelo si es Grok - asegurar que nunca sea gpt-4o u otro modelo inválido
-        if (characterConfig.settings.model !== targetModel || currentModel.startsWith('gpt-') || currentModel.includes('grok-3') || !isCurrentModelValidGrok) {
+        if (characterConfig.settings.model !== targetModel || currentModel.startsWith('gpt-') || (!isCurrentModelValidGrok && currentModel)) {
           characterConfig.settings.model = targetModel;
           needsUpdate = true;
           console.log(`📝 ⚠️ FORZANDO actualización de modelo para Grok: '${currentModel || '(no configurado)'}' → '${targetModel}'`);
@@ -480,18 +534,22 @@ console.log("\n");
           console.log(`   ✅ Modelo '${currentModel}' ya es válido para Grok`);
         }
         
-        // También establecer OPENAI_MODEL en process.env para que ElizaOS lo use desde variables de entorno
+        // Establecer tanto XAI_MODEL como OPENAI_MODEL para compatibilidad
+        if (!process.env.XAI_MODEL || !validGrokModels.includes(process.env.XAI_MODEL)) {
+          process.env.XAI_MODEL = targetModel;
+        }
         if (!process.env.OPENAI_MODEL || !validGrokModels.includes(process.env.OPENAI_MODEL)) {
           process.env.OPENAI_MODEL = targetModel;
-          console.log(`📝 Configurando OPENAI_MODEL=${targetModel} para que ElizaOS lo use desde variables de entorno`);
         }
+        console.log(`📝 Configurando XAI_MODEL=${targetModel} y OPENAI_MODEL=${targetModel} para máxima compatibilidad`);
       } 
-      // Si no es Grok pero OPENAI_MODEL está configurado, usarlo
-      else if (process.env.OPENAI_MODEL) {
-        if (characterConfig.settings.model !== process.env.OPENAI_MODEL) {
-          characterConfig.settings.model = process.env.OPENAI_MODEL;
+      // Si no es Grok pero hay modelo configurado, usarlo
+      else if (process.env.XAI_MODEL || process.env.OPENAI_MODEL) {
+        const targetModel = process.env.XAI_MODEL || process.env.OPENAI_MODEL;
+        if (characterConfig.settings.model !== targetModel) {
+          characterConfig.settings.model = targetModel;
           needsUpdate = true;
-          console.log(`📝 Actualizando settings.model a '${process.env.OPENAI_MODEL}'...`);
+          console.log(`📝 Actualizando settings.model a '${targetModel}'...`);
         }
       }
     }
@@ -519,12 +577,17 @@ console.log("\n");
     }
     
     // Actualizar otros secrets si están presentes
-    if (process.env.OPENAI_API_KEY && characterConfig.settings?.secrets?.OPENAI_API_KEY) {
-      if (characterConfig.settings.secrets.OPENAI_API_KEY === '{{OPENAI_API_KEY}}' || 
-          characterConfig.settings.secrets.OPENAI_API_KEY !== process.env.OPENAI_API_KEY) {
-        characterConfig.settings.secrets.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    // Actualizar OPENAI_API_KEY en settings.secrets (priorizar XAI_API_KEY si existe)
+    const apiKeyToUse = process.env.XAI_API_KEY || process.env.OPENAI_API_KEY;
+    if (apiKeyToUse && characterConfig.settings?.secrets?.OPENAI_API_KEY) {
+      const currentValue = characterConfig.settings.secrets.OPENAI_API_KEY;
+      if (currentValue === '{{OPENAI_API_KEY}}' ||
+          currentValue === '{{XAI_API_KEY}}' ||
+          (currentValue !== apiKeyToUse)) {
+        characterConfig.settings.secrets.OPENAI_API_KEY = apiKeyToUse;
         needsUpdate = true;
-        console.log("📝 Actualizando secrets.OPENAI_API_KEY...");
+        const keySource = process.env.XAI_API_KEY ? 'XAI_API_KEY' : 'OPENAI_API_KEY';
+        console.log(`📝 Actualizando secrets.OPENAI_API_KEY desde ${keySource}...`);
       }
     }
     
@@ -553,9 +616,15 @@ console.log("\n");
   
   // Log final de variables críticas para debugging
   console.log("📋 Variables finales que se pasarán a ElizaOS:");
+  if (process.env.XAI_API_KEY) {
+    console.log(`   XAI_API_KEY: ${process.env.XAI_API_KEY.substring(0, 10)}... (variables específicas de XAI detectadas)`);
+    console.log(`   XAI_MODEL: ${process.env.XAI_MODEL || 'NO CONFIGURADA'}`);
+    console.log(`   → Mapeadas a OPENAI_API_KEY y OPENAI_MODEL para compatibilidad`);
+  }
   console.log(`   OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 10) + '...' : 'NO CONFIGURADA'}`);
   console.log(`   OPENAI_API_BASE_URL: ${process.env.OPENAI_API_BASE_URL || 'NO CONFIGURADA'}`);
   console.log(`   OPENAI_BASE_URL: ${process.env.OPENAI_BASE_URL || 'NO CONFIGURADA'}`);
+  console.log(`   OPENAI_MODEL: ${process.env.OPENAI_MODEL || 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_PRIVATE_KEY: ${process.env.SOLANA_PRIVATE_KEY ? process.env.SOLANA_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_PRIVATE_KEY.length} chars)` : 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_PUBLIC_KEY: ${process.env.SOLANA_PUBLIC_KEY || 'NO CONFIGURADA'}\n`);
   

@@ -85,3 +85,14 @@ Esto te ayuda a entender qué formato está usando el script y cuál debería fu
 2. **Si el error persiste con 32 bytes**, configura `SOLANA_USE_64_BYTES=true` en Railway
 3. **Si el error persiste con 64 bytes**, verifica que la clave pública coincida con la derivada de la privada
 
+## Solución Inmediata: Probar con 64 Bytes
+
+Según los logs, el script está usando **32 bytes (seed)** por defecto, pero el error persiste. 
+
+**ACCIÓN REQUERIDA**: En Railway, agrega esta variable de entorno:
+```
+SOLANA_USE_64_BYTES=true
+```
+
+Esto hará que el script use el formato de **64 bytes** (formato completo) que es el que viene directamente de tu wallet. Los logs muestran que este formato funciona correctamente con `Keypair.fromSecretKey()`.
+

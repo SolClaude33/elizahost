@@ -657,6 +657,37 @@ console.log("\n");
       }
     }
     
+    // CRÍTICO: Agregar la dirección de wallet al bio para que el agente sepa cuál es su wallet
+    if (process.env.SOLANA_PUBLIC_KEY) {
+      const walletAddress = process.env.SOLANA_PUBLIC_KEY.trim();
+      const walletInfoLine = `My Solana wallet address is: ${walletAddress}`;
+      
+      // Asegurar que bio existe y es un array
+      if (!characterConfig.bio || !Array.isArray(characterConfig.bio)) {
+        characterConfig.bio = [];
+      }
+      
+      // Buscar si ya existe una línea con la dirección de wallet
+      const walletInfoIndex = characterConfig.bio.findIndex(line => 
+        line.includes('My Solana wallet address is:') || 
+        line.includes('wallet address is:')
+      );
+      
+      if (walletInfoIndex >= 0) {
+        // Actualizar la línea existente si es diferente
+        if (characterConfig.bio[walletInfoIndex] !== walletInfoLine) {
+          characterConfig.bio[walletInfoIndex] = walletInfoLine;
+          needsUpdate = true;
+          console.log("📝 Actualizando dirección de wallet en bio del personaje...");
+        }
+      } else {
+        // Agregar nueva línea al bio
+        characterConfig.bio.push(walletInfoLine);
+        needsUpdate = true;
+        console.log("📝 Agregando dirección de wallet al bio del personaje para que el agente pueda responder preguntas sobre su wallet...");
+      }
+    }
+    
     // Actualizar otros secrets si están presentes
     // Actualizar OPENAI_API_KEY en settings.secrets (priorizar XAI_API_KEY si existe)
     // Reutilizar apiKeyToUse ya declarada arriba

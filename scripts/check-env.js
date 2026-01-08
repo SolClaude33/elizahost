@@ -311,32 +311,69 @@ if (solanaKey) {
             }
           }
           
-          // IMPORTANTE: ElizaOS necesita solo los primeros 32 bytes (seed)
-          // Convertir automáticamente la clave de 64 bytes a 32 bytes para ElizaOS
-          console.log("\n   🔄 Convirtiendo automáticamente clave de 64 bytes a 32 bytes (seed) para ElizaOS...");
+          // NOTA: Según la investigación, el plugin de Solana podría necesitar 32 bytes (seed) o 64 bytes
+          // La clave de 64 bytes funciona correctamente con Keypair.fromSecretKey()
+          // Pero algunos plugins esperan 32 bytes (seed) para usar con Keypair.fromSeed()
+          
+          // ESTRATEGIA: Intentar primero con 32 bytes (seed), que es lo más común en plugins de Solana
+          // Si esto no funciona, el usuario puede cambiar a 64 bytes manualmente
+          console.log("\n   🔄 Estrategia de conversión:");
+          console.log("   - La clave de 64 bytes funciona con Keypair.fromSecretKey()");
+          console.log("   - Muchos plugins esperan 32 bytes (seed) para Keypair.fromSeed()");
+          console.log("   - Convirtiendo a 32 bytes (seed) que es el formato más común");
+          
+          // Preparar ambas versiones
           const seedOnly = decoded.slice(0, 32);
           const seedBase58 = bs58.encode(seedOnly);
+          const key64BytesBase58 = cleanKey; // La clave original de 64 bytes
           
-          // Actualizar process.env para que ElizaOS use la versión de 32 bytes
+          // PROBAR CON LA CLAVE DE 64 BYTES PRIMERO (ya funciona con Keypair.fromSecretKey)
+          // Si el error persiste, entonces intentaremos con 32 bytes
           const oldKey = process.env.SOLANA_PRIVATE_KEY;
-          process.env.SOLANA_PRIVATE_KEY = seedBase58;
           
-          console.log(`   ✅ SOLANA_PRIVATE_KEY actualizada automáticamente a formato de 32 bytes (seed)`);
-          console.log(`   📋 Longitud anterior: ${oldKey.length} chars → Nueva: ${seedBase58.length} chars`);
-          console.log(`   📋 Clave pública correspondiente: ${derivedPublicKey}`);
-          console.log(`   💡 Ahora ElizaOS usará la clave en el formato correcto que necesita`);
+          // Verificar si el usuario quiere usar 64 bytes explícitamente
+          const use64Bytes = process.env.SOLANA_USE_64_BYTES === 'true' || process.env.SOLANA_USE_64_BYTES === '1';
           
-          // Verificar que la conversión funcionó correctamente
-          try {
-            const testDecoded = bs58.decode(seedBase58);
-            if (testDecoded.length === 32) {
-              console.log(`   ✅ Verificación: La clave convertida tiene exactamente 32 bytes`);
-            } else {
-              console.log(`   ⚠️ ADVERTENCIA: La clave convertida tiene ${testDecoded.length} bytes (esperado: 32)`);
+          if (use64Bytes) {
+            // Usar la clave de 64 bytes directamente
+            process.env.SOLANA_PRIVATE_KEY = key64BytesBase58;
+            console.log(`   ✅ SOLANA_PRIVATE_KEY configurada para usar formato de 64 bytes (formato completo)`);
+            console.log(`   📋 Longitud: ${key64BytesBase58.length} chars (64 bytes decodificados)`);
+          } else {
+            // Usar la clave de 32 bytes (seed) - formato más común
+            process.env.SOLANA_PRIVATE_KEY = seedBase58;
+            console.log(`   ✅ SOLANA_PRIVATE_KEY actualizada a formato de 32 bytes (seed)`);
+            console.log(`   📋 Longitud anterior: ${oldKey.length} chars → Nueva: ${seedBase58.length} chars`);
+            
+            // Verificar que la conversión funcionó correctamente
+            try {
+              const testDecoded = bs58.decode(seedBase58);
+              if (testDecoded.length === 32) {
+                console.log(`   ✅ Verificación: La clave convertida tiene exactamente 32 bytes`);
+              } else {
+                console.log(`   ⚠️ ADVERTENCIA: La clave convertida tiene ${testDecoded.length} bytes (esperado: 32)`);
+              }
+              
+              // También verificar que podemos derivar el keypair desde el seed
+              const { Keypair } = await import('@solana/web3.js');
+              const testKeypair = Keypair.fromSeed(testDecoded);
+              const testDerivedPubKey = testKeypair.publicKey.toBase58();
+              if (testDerivedPubKey === derivedPublicKey) {
+                console.log(`   ✅ Verificación: El seed deriva correctamente a la clave pública`);
+              } else {
+                console.log(`   ⚠️ ADVERTENCIA: El seed no deriva a la clave pública correcta`);
+              }
+            } catch (verifyError) {
+              console.log(`   ⚠️ Error al verificar clave convertida: ${verifyError.message}`);
             }
-          } catch (verifyError) {
-            console.log(`   ⚠️ Error al verificar clave convertida: ${verifyError.message}`);
           }
+          
+          console.log(`   📋 Clave pública correspondiente: ${derivedPublicKey}`);
+          console.log(`   💡 Si el error 'bad secret key size' persiste, prueba configurar SOLANA_USE_64_BYTES=true`);
+          
+          // Guardar ambas versiones por si acaso
+          process.env.SOLANA_PRIVATE_KEY_32BYTES = seedBase58;
+          process.env.SOLANA_PRIVATE_KEY_64BYTES = key64BytesBase58;
           
         } catch (testError) {
           console.log(`   ❌ Error al validar clave de 64 bytes: ${testError.message}`);
@@ -425,24 +462,28 @@ console.log("\n");
         const currentModel = characterConfig.settings.model || '';
         const isCurrentModelValidGrok = validGrokModels.includes(currentModel);
         
-        // Si OPENAI_MODEL está configurado y es un modelo válido de Grok, usarlo
+        // FORZAR actualización del modelo para Grok - no confiar en valores existentes
+        let targetModel = 'grok-beta'; // Modelo por defecto
+        
+        // Si OPENAI_MODEL está configurado y es válido, usarlo
         if (process.env.OPENAI_MODEL && validGrokModels.includes(process.env.OPENAI_MODEL)) {
-          if (characterConfig.settings.model !== process.env.OPENAI_MODEL) {
-            characterConfig.settings.model = process.env.OPENAI_MODEL;
-            needsUpdate = true;
-            console.log(`📝 Actualizando settings.model a '${process.env.OPENAI_MODEL}' (modelo de Grok desde OPENAI_MODEL)...`);
-          }
-        } 
-        // Si el modelo actual NO es válido para Grok (incluyendo modelos de OpenAI como gpt-4o), usar un modelo por defecto
-        else if (!isCurrentModelValidGrok || currentModel.startsWith('gpt-') || currentModel === '' || currentModel.includes('grok-3')) {
-          const defaultGrokModel = 'grok-beta'; // Modelo más común y estable de Grok
-          characterConfig.settings.model = defaultGrokModel;
+          targetModel = process.env.OPENAI_MODEL;
+        }
+        
+        // SIEMPRE actualizar el modelo si es Grok - asegurar que nunca sea gpt-4o u otro modelo inválido
+        if (characterConfig.settings.model !== targetModel || currentModel.startsWith('gpt-') || currentModel.includes('grok-3') || !isCurrentModelValidGrok) {
+          characterConfig.settings.model = targetModel;
           needsUpdate = true;
-          console.log(`📝 ⚠️ El modelo actual '${currentModel || '(no configurado)'}' no es válido para Grok. Actualizando a '${defaultGrokModel}'...`);
-          console.log(`   💡 Para usar otro modelo de Grok, configura OPENAI_MODEL con: grok-beta, grok-2-1212, o grok-2-vision-1212`);
+          console.log(`📝 ⚠️ FORZANDO actualización de modelo para Grok: '${currentModel || '(no configurado)'}' → '${targetModel}'`);
+          console.log(`   💡 Esto asegura que ElizaOS use un modelo válido de Grok en lugar de gpt-4o`);
         } else {
-          // El modelo actual ya es válido, no cambiar
-          console.log(`   ✅ Modelo '${currentModel}' es válido para Grok`);
+          console.log(`   ✅ Modelo '${currentModel}' ya es válido para Grok`);
+        }
+        
+        // También establecer OPENAI_MODEL en process.env para que ElizaOS lo use desde variables de entorno
+        if (!process.env.OPENAI_MODEL || !validGrokModels.includes(process.env.OPENAI_MODEL)) {
+          process.env.OPENAI_MODEL = targetModel;
+          console.log(`📝 Configurando OPENAI_MODEL=${targetModel} para que ElizaOS lo use desde variables de entorno`);
         }
       } 
       // Si no es Grok pero OPENAI_MODEL está configurado, usarlo

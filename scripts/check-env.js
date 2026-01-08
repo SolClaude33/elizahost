@@ -478,9 +478,11 @@ console.log("\n");
     const characterConfig = JSON.parse(fs.readFileSync(characterPath, 'utf-8'));
     let needsUpdate = false;
     
+    // Declarar apiKeyToUse una sola vez al inicio para reutilizarla en todo el scope
+    // Priorizar XAI_API_KEY si existe, sino usar OPENAI_API_KEY
+    const apiKeyToUse = process.env.XAI_API_KEY || process.env.OPENAI_API_KEY;
+    
         // Actualizar settings.apiKey y settings.apiBaseUrl (CRÍTICO para Grok)
-        // Priorizar XAI_API_KEY si existe, sino usar OPENAI_API_KEY
-        const apiKeyToUse = process.env.XAI_API_KEY || process.env.OPENAI_API_KEY;
         if (apiKeyToUse) {
           if (characterConfig.settings?.apiKey === '{{OPENAI_API_KEY}}' ||
               characterConfig.settings?.apiKey === '{{XAI_API_KEY}}' ||
@@ -578,7 +580,7 @@ console.log("\n");
     
     // Actualizar otros secrets si están presentes
     // Actualizar OPENAI_API_KEY en settings.secrets (priorizar XAI_API_KEY si existe)
-    const apiKeyToUse = process.env.XAI_API_KEY || process.env.OPENAI_API_KEY;
+    // Reutilizar apiKeyToUse ya declarada arriba
     if (apiKeyToUse && characterConfig.settings?.secrets?.OPENAI_API_KEY) {
       const currentValue = characterConfig.settings.secrets.OPENAI_API_KEY;
       if (currentValue === '{{OPENAI_API_KEY}}' ||

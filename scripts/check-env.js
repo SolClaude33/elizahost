@@ -543,8 +543,13 @@ console.log("\n");
         // FORZAR el modelo en process.env para asegurar que ElizaOS lo use
         process.env.OPENAI_MODEL = targetModel;
         process.env.XAI_MODEL = targetModel;
+        // CRÍTICO: ElizaOS puede usar OPENAI_LARGE_MODEL y OPENAI_SMALL_MODEL que tienen valores por defecto de gpt-4o
+        // Establecer ambos para Grok para evitar que ElizaOS use gpt-4o por defecto
+        process.env.OPENAI_LARGE_MODEL = targetModel;
+        process.env.OPENAI_SMALL_MODEL = targetModel;
         console.log(`📝 ⚠️ FORZANDO OPENAI_MODEL=${targetModel} en process.env (esto es CRÍTICO para que ElizaOS use el modelo correcto)`);
         console.log(`📝 Configurando XAI_MODEL=${targetModel} y OPENAI_MODEL=${targetModel} para máxima compatibilidad`);
+        console.log(`📝 ⚠️ FORZANDO OPENAI_LARGE_MODEL=${targetModel} y OPENAI_SMALL_MODEL=${targetModel} (ElizaOS puede leer desde estas variables)`);
       } 
       // Si no es Grok pero hay modelo configurado, usarlo
       else if (process.env.XAI_MODEL || process.env.OPENAI_MODEL) {
@@ -635,13 +640,21 @@ console.log("\n");
       if (!process.env.XAI_MODEL) {
         process.env.XAI_MODEL = defaultGrokModel;
       }
+      // CRÍTICO: También establecer OPENAI_LARGE_MODEL y OPENAI_SMALL_MODEL para Grok
+      process.env.OPENAI_LARGE_MODEL = defaultGrokModel;
+      process.env.OPENAI_SMALL_MODEL = defaultGrokModel;
       console.log(`⚠️  FORZANDO OPENAI_MODEL=${defaultGrokModel} para Grok (para evitar que ElizaOS use gpt-4o por defecto)`);
+      console.log(`⚠️  FORZANDO OPENAI_LARGE_MODEL=${defaultGrokModel} y OPENAI_SMALL_MODEL=${defaultGrokModel} para Grok`);
     } else {
       // Asegurar que tanto XAI_MODEL como OPENAI_MODEL estén configurados
       process.env.OPENAI_MODEL = currentModel;
       if (process.env.XAI_MODEL && process.env.XAI_MODEL !== currentModel) {
         process.env.XAI_MODEL = currentModel;
       }
+      // CRÍTICO: También establecer OPENAI_LARGE_MODEL y OPENAI_SMALL_MODEL para Grok
+      process.env.OPENAI_LARGE_MODEL = currentModel;
+      process.env.OPENAI_SMALL_MODEL = currentModel;
+      console.log(`📝 ⚠️ FORZANDO OPENAI_LARGE_MODEL=${currentModel} y OPENAI_SMALL_MODEL=${currentModel} para Grok`);
     }
   }
   
@@ -659,6 +672,8 @@ console.log("\n");
   console.log(`   OPENAI_API_BASE_URL: ${process.env.OPENAI_API_BASE_URL || 'NO CONFIGURADA'}`);
   console.log(`   OPENAI_BASE_URL: ${process.env.OPENAI_BASE_URL || 'NO CONFIGURADA'}`);
   console.log(`   OPENAI_MODEL: ${process.env.OPENAI_MODEL || 'NO CONFIGURADA'} ⚠️ ESTE DEBE SER EL MODELO QUE ELIZAOS USARÁ`);
+  console.log(`   OPENAI_LARGE_MODEL: ${process.env.OPENAI_LARGE_MODEL || 'NO CONFIGURADA'} ⚠️ ElizaOS puede leer desde aquí`);
+  console.log(`   OPENAI_SMALL_MODEL: ${process.env.OPENAI_SMALL_MODEL || 'NO CONFIGURADA'} ⚠️ ElizaOS puede leer desde aquí`);
   console.log(`   SOLANA_PRIVATE_KEY: ${process.env.SOLANA_PRIVATE_KEY ? process.env.SOLANA_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_PRIVATE_KEY.length} chars)` : 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_PUBLIC_KEY: ${process.env.SOLANA_PUBLIC_KEY || 'NO CONFIGURADA'}\n`);
   

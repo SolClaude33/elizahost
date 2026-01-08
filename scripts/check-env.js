@@ -527,22 +527,23 @@ console.log("\n");
         }
         
         // SIEMPRE actualizar el modelo si es Grok - asegurar que nunca sea gpt-4o u otro modelo inválido
-        if (characterConfig.settings.model !== targetModel || currentModel.startsWith('gpt-') || (!isCurrentModelValidGrok && currentModel)) {
+        // También forzar actualización si el modelo actual es cualquier modelo de OpenAI (gpt-*)
+        const isOpenAIModel = currentModel && (currentModel.startsWith('gpt-') || currentModel === 'gpt-4o');
+        if (characterConfig.settings.model !== targetModel || isOpenAIModel || (!isCurrentModelValidGrok && currentModel)) {
           characterConfig.settings.model = targetModel;
           needsUpdate = true;
           console.log(`📝 ⚠️ FORZANDO actualización de modelo para Grok: '${currentModel || '(no configurado)'}' → '${targetModel}'`);
-          console.log(`   💡 Esto asegura que ElizaOS use un modelo válido de Grok en lugar de gpt-4o`);
+          console.log(`   💡 Esto asegura que ElizaOS use un modelo válido de Grok en lugar de ${currentModel || 'gpt-4o'}`);
         } else {
           console.log(`   ✅ Modelo '${currentModel}' ya es válido para Grok`);
         }
         
-        // Establecer tanto XAI_MODEL como OPENAI_MODEL para compatibilidad
-        if (!process.env.XAI_MODEL || !validGrokModels.includes(process.env.XAI_MODEL)) {
-          process.env.XAI_MODEL = targetModel;
-        }
-        if (!process.env.OPENAI_MODEL || !validGrokModels.includes(process.env.OPENAI_MODEL)) {
-          process.env.OPENAI_MODEL = targetModel;
-        }
+        // IMPORTANTE: También actualizar OPENAI_MODEL en process.env para que ElizaOS lo use
+        // Esto es crítico porque ElizaOS puede leer el modelo desde process.env en lugar del archivo JSON
+        // FORZAR el modelo en process.env para asegurar que ElizaOS lo use
+        process.env.OPENAI_MODEL = targetModel;
+        process.env.XAI_MODEL = targetModel;
+        console.log(`📝 ⚠️ FORZANDO OPENAI_MODEL=${targetModel} en process.env (esto es CRÍTICO para que ElizaOS use el modelo correcto)`);
         console.log(`📝 Configurando XAI_MODEL=${targetModel} y OPENAI_MODEL=${targetModel} para máxima compatibilidad`);
       } 
       // Si no es Grok pero hay modelo configurado, usarlo
@@ -604,13 +605,44 @@ console.log("\n");
     
     if (needsUpdate) {
       fs.writeFileSync(characterPath, JSON.stringify(characterConfig, null, 2), 'utf-8');
-      console.log("✅ Archivo de personaje actualizado correctamente con valores reales\n");
+      console.log("✅ Archivo de personaje actualizado correctamente con valores reales");
+      console.log(`   📋 Modelo final en archivo: ${characterConfig.settings?.model || 'NO CONFIGURADO'}`);
+      console.log(`   📋 apiKey en archivo: ${characterConfig.settings?.apiKey ? characterConfig.settings.apiKey.substring(0, 10) + '...' : 'NO CONFIGURADO'}`);
+      console.log(`   📋 apiBaseUrl en archivo: ${characterConfig.settings?.apiBaseUrl || 'NO CONFIGURADO'}\n`);
     } else {
-      console.log("ℹ️ Archivo de personaje ya tiene los valores correctos\n");
+      console.log("ℹ️ Archivo de personaje ya tiene los valores correctos");
+      console.log(`   📋 Modelo actual en archivo: ${characterConfig.settings?.model || 'NO CONFIGURADO'}\n`);
     }
   } catch (charUpdateError) {
     console.log(`⚠️ No se pudo actualizar el archivo de personaje: ${charUpdateError.message}`);
     console.log("   Continuando con variables de entorno solamente...\n");
+  }
+  
+  // CRÍTICO: Asegurar que OPENAI_MODEL esté configurado correctamente antes de iniciar ElizaOS
+  // Esto es especialmente importante para Grok, ya que ElizaOS puede usar un valor por defecto de gpt-4o
+  if (process.env.XAI_API_KEY || (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith('xai-'))) {
+    // Es Grok, asegurar que OPENAI_MODEL sea un modelo válido de Grok
+    const validGrokModels = ['grok-beta', 'grok-2-1212', 'grok-2-vision-1212', 'grok-3-latest'];
+    const currentModel = process.env.OPENAI_MODEL || process.env.XAI_MODEL;
+    
+    // Si OPENAI_MODEL no está configurado o no es un modelo válido de Grok, forzar grok-beta
+    if (!currentModel || !validGrokModels.includes(currentModel)) {
+      const defaultGrokModel = process.env.XAI_MODEL && validGrokModels.includes(process.env.XAI_MODEL) 
+        ? process.env.XAI_MODEL 
+        : 'grok-beta';
+      
+      process.env.OPENAI_MODEL = defaultGrokModel;
+      if (!process.env.XAI_MODEL) {
+        process.env.XAI_MODEL = defaultGrokModel;
+      }
+      console.log(`⚠️  FORZANDO OPENAI_MODEL=${defaultGrokModel} para Grok (para evitar que ElizaOS use gpt-4o por defecto)`);
+    } else {
+      // Asegurar que tanto XAI_MODEL como OPENAI_MODEL estén configurados
+      process.env.OPENAI_MODEL = currentModel;
+      if (process.env.XAI_MODEL && process.env.XAI_MODEL !== currentModel) {
+        process.env.XAI_MODEL = currentModel;
+      }
+    }
   }
   
   // Después de validar y convertir las variables, ejecutar elizaos start
@@ -626,7 +658,7 @@ console.log("\n");
   console.log(`   OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 10) + '...' : 'NO CONFIGURADA'}`);
   console.log(`   OPENAI_API_BASE_URL: ${process.env.OPENAI_API_BASE_URL || 'NO CONFIGURADA'}`);
   console.log(`   OPENAI_BASE_URL: ${process.env.OPENAI_BASE_URL || 'NO CONFIGURADA'}`);
-  console.log(`   OPENAI_MODEL: ${process.env.OPENAI_MODEL || 'NO CONFIGURADA'}`);
+  console.log(`   OPENAI_MODEL: ${process.env.OPENAI_MODEL || 'NO CONFIGURADA'} ⚠️ ESTE DEBE SER EL MODELO QUE ELIZAOS USARÁ`);
   console.log(`   SOLANA_PRIVATE_KEY: ${process.env.SOLANA_PRIVATE_KEY ? process.env.SOLANA_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_PRIVATE_KEY.length} chars)` : 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_PUBLIC_KEY: ${process.env.SOLANA_PUBLIC_KEY || 'NO CONFIGURADA'}\n`);
   

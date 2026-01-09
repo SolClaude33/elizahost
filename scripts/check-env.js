@@ -790,6 +790,15 @@ console.log("\n");
     }
   }
   
+  // CRÍTICO: Configurar trust proxy para Railway (necesario para rate limiting)
+  // Railway está detrás de un proxy, Express necesita confiar en los headers X-Forwarded-For
+  if (!process.env.TRUST_PROXY) {
+    process.env.TRUST_PROXY = 'true';
+    console.log("🔧 Configurando TRUST_PROXY=true para Railway (necesario para evitar errores de rate limiting)");
+  } else {
+    console.log(`✅ TRUST_PROXY ya configurado: ${process.env.TRUST_PROXY}`);
+  }
+  
   // Después de validar y convertir las variables, ejecutar elizaos start
   console.log("🚀 Iniciando ElizaOS con variables de entorno validadas...\n");
   
@@ -808,7 +817,8 @@ console.log("\n");
   console.log(`   OPENAI_SMALL_MODEL: ${process.env.OPENAI_SMALL_MODEL || 'NO CONFIGURADA'} ⚠️ ElizaOS puede leer desde aquí`);
   console.log(`   SOLANA_PRIVATE_KEY: ${process.env.SOLANA_PRIVATE_KEY ? process.env.SOLANA_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_PRIVATE_KEY.length} chars)` : 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_WALLET_PRIVATE_KEY: ${process.env.SOLANA_WALLET_PRIVATE_KEY ? process.env.SOLANA_WALLET_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_WALLET_PRIVATE_KEY.length} chars) - Alternativa soportada` : 'NO CONFIGURADA'}`);
-  console.log(`   SOLANA_PUBLIC_KEY: ${process.env.SOLANA_PUBLIC_KEY || 'NO CONFIGURADA'}\n`);
+  console.log(`   SOLANA_PUBLIC_KEY: ${process.env.SOLANA_PUBLIC_KEY || 'NO CONFIGURADA'}`);
+  console.log(`   TRUST_PROXY: ${process.env.TRUST_PROXY || 'NO CONFIGURADA'} ⚠️ Necesario para Railway\n`);
   
   const { spawn } = await import('child_process');
   

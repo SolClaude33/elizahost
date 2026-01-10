@@ -33,7 +33,7 @@ async function main() {
       'SOL_ADDRESS', // Requerido por @elizaos/plugin-solana
       'SLIPPAGE', // Requerido por @elizaos/plugin-solana
       'BIRDEYE_API_KEY', // Recomendado por @elizaos/plugin-solana
-      'ELEVENLABS_API_KEY' // Solo si usas @elizaos/plugin-elevenlabs
+      'ELEVENLABS_API_KEY', // Solo si usas @elizaos/plugin-elevenlabs
       // Variables de Twitter
       'TWITTER_API_KEY',
       'TWITTER_API_SECRET_KEY',

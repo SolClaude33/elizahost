@@ -30,6 +30,10 @@ async function main() {
       'SOLANA_PRIVATE_KEY',
       'SOLANA_WALLET_PRIVATE_KEY', // Alternativa soportada por ElizaOS
       'HELIUS_API_KEY',
+      'SOL_ADDRESS', // Requerido por @elizaos/plugin-solana
+      'SLIPPAGE', // Requerido por @elizaos/plugin-solana
+      'BIRDEYE_API_KEY', // Recomendado por @elizaos/plugin-solana
+      'ELEVENLABS_API_KEY' // Solo si usas @elizaos/plugin-elevenlabs
       // Variables de Twitter
       'TWITTER_API_KEY',
       'TWITTER_API_SECRET_KEY',
@@ -110,7 +114,10 @@ const requiredVars = [
   'OPENAI_API_BASE_URL',
   'SOLANA_RPC_URL',
   'SOLANA_PUBLIC_KEY',
-  'SOLANA_PRIVATE_KEY'
+  'SOLANA_PRIVATE_KEY',
+  'SOL_ADDRESS', // Requerido por @elizaos/plugin-solana
+  'SLIPPAGE', // Requerido por @elizaos/plugin-solana
+  'HELIUS_API_KEY' // Requerido por @elizaos/plugin-solana
 ];
 
 const optionalVars = [
@@ -118,7 +125,8 @@ const optionalVars = [
   'OPENAI_MODEL', // Modelo genérico (puede ser usado como fallback)
   'TWITTER_API_KEY',
   'TWITTER_API_SECRET_KEY',
-  'HELIUS_API_KEY'
+  'BIRDEYE_API_KEY', // Recomendado por @elizaos/plugin-solana para datos de mercado
+  'ELEVENLABS_API_KEY' // Solo si usas @elizaos/plugin-elevenlabs
 ];
 
 console.log("📋 Variables requeridas:");
@@ -511,6 +519,62 @@ if (solanaPubKey) {
   if (process.env.SOLANA_PUBLIC_KEY !== solanaPubKey) {
     process.env.SOLANA_PUBLIC_KEY = solanaPubKey;
   }
+}
+
+// Validar SOL_ADDRESS (requerido por @elizaos/plugin-solana)
+let solAddress = cleanEnvVar(process.env.SOL_ADDRESS || '');
+const defaultSolAddress = 'So11111111111111111111111111111111111111112';
+if (!solAddress) {
+  console.log("   ⚠️ SOL_ADDRESS: NO CONFIGURADA - Configurando valor por defecto");
+  process.env.SOL_ADDRESS = defaultSolAddress;
+  solAddress = defaultSolAddress;
+  console.log(`   🔧 SOL_ADDRESS configurada automáticamente: ${defaultSolAddress}`);
+} else if (solAddress !== defaultSolAddress) {
+  console.log(`   ⚠️ SOL_ADDRESS: '${solAddress}' - Valor esperado: '${defaultSolAddress}'`);
+  console.log(`   💡 Configurando valor correcto automáticamente...`);
+  process.env.SOL_ADDRESS = defaultSolAddress;
+  solAddress = defaultSolAddress;
+} else {
+  console.log(`   ✅ SOL_ADDRESS: Configurada correctamente (${solAddress.substring(0, 20)}...)`);
+}
+
+// Validar SLIPPAGE (requerido por @elizaos/plugin-solana)
+let slippage = cleanEnvVar(process.env.SLIPPAGE || '');
+const defaultSlippage = '100'; // 1% = 100 basis points
+if (!slippage) {
+  console.log("   ⚠️ SLIPPAGE: NO CONFIGURADA - Configurando valor por defecto (100 = 1%)");
+  process.env.SLIPPAGE = defaultSlippage;
+  slippage = defaultSlippage;
+  console.log(`   🔧 SLIPPAGE configurada automáticamente: ${defaultSlippage} (1%)`);
+} else {
+  const slippageNum = parseInt(slippage, 10);
+  if (isNaN(slippageNum) || slippageNum < 0 || slippageNum > 10000) {
+    console.log(`   ⚠️ SLIPPAGE: '${slippage}' es inválido - Debe ser un número entre 0 y 10000 (basis points)`);
+    console.log(`   💡 Configurando valor por defecto: ${defaultSlippage}`);
+    process.env.SLIPPAGE = defaultSlippage;
+    slippage = defaultSlippage;
+  } else {
+    const percentage = slippageNum / 100;
+    console.log(`   ✅ SLIPPAGE: Configurada correctamente (${slippage} basis points = ${percentage}%)`);
+  }
+}
+
+// Validar BIRDEYE_API_KEY (opcional pero recomendado)
+const birdeyeKey = cleanEnvVar(process.env.BIRDEYE_API_KEY || '');
+if (!birdeyeKey) {
+  console.log("   ⚠️ BIRDEYE_API_KEY: NO CONFIGURADA - Funcionalidad de mercado limitada");
+  console.log("   💡 Para datos de mercado en tiempo real, obtén una API key en: https://birdeye.so/");
+} else {
+  console.log(`   ✅ BIRDEYE_API_KEY: Configurada (${birdeyeKey.substring(0, 8)}...)`);
+}
+
+// Validar HELIUS_API_KEY (requerido por @elizaos/plugin-solana)
+const heliusKey = cleanEnvVar(process.env.HELIUS_API_KEY || '');
+if (!heliusKey) {
+  console.log("   ⚠️ HELIUS_API_KEY: NO CONFIGURADA - Necesaria para funcionalidad Solana");
+  console.log("   💡 Obtén una API key en: https://www.helius.dev/");
+} else {
+  console.log(`   ✅ HELIUS_API_KEY: Configurada (${heliusKey.substring(0, 8)}...)`);
 }
 
 console.log("\n");

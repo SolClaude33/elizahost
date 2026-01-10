@@ -517,7 +517,11 @@ console.log("\n");
   
   // Después de validar y convertir las variables, actualizar el archivo de personaje si es necesario
   // Esto asegura que ElizaOS use los valores reales en lugar de placeholders
-  const characterPath = './characters/amica-agent.json';
+  // Permite elegir el personaje mediante variable de entorno ELIZA_CHARACTER_NAME
+  // Valores posibles: 'amica-agent', 'nyako-agent' o cualquier otro archivo en ./characters/
+  const characterName = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+  const characterPath = `./characters/${characterName}.json`;
+  console.log(`📋 Usando personaje: ${characterName}`);
   try {
     const fs = await import('fs');
     const characterConfig = JSON.parse(fs.readFileSync(characterPath, 'utf-8'));
@@ -730,7 +734,9 @@ console.log("\n");
   // VERIFICACIÓN FINAL: Asegurar que el archivo JSON tiene el valor correcto
   try {
     const fs = await import('fs');
-    const characterConfig = JSON.parse(fs.readFileSync('./characters/amica-agent.json', 'utf-8'));
+    const characterName = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+    const characterFilePath = `./characters/${characterName}.json`;
+    const characterConfig = JSON.parse(fs.readFileSync(characterFilePath, 'utf-8'));
     const jsonKey = characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY;
     
     if (jsonKey && process.env.SOLANA_PRIVATE_KEY) {
@@ -824,7 +830,11 @@ console.log("\n");
   
   // Ejecutar elizaos start usando npx (que encontrará el ejecutable correcto)
   // Pasar las variables de entorno actualizadas (incluyendo SOLANA_PRIVATE_KEY convertida)
-  const elizaosProcess = spawn('npx', ['-y', 'elizaos', 'start', '--character', './characters/amica-agent.json'], {
+  // Usar el personaje seleccionado mediante variable de entorno
+  const finalCharacterName = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+  const finalCharacterFilePath = `./characters/${finalCharacterName}.json`;
+  console.log(`🚀 Iniciando ElizaOS con personaje: ${finalCharacterName}`);
+  const elizaosProcess = spawn('npx', ['-y', 'elizaos', 'start', '--character', finalCharacterFilePath], {
     stdio: 'inherit', // Heredar stdin, stdout, stderr
     env: process.env,  // Pasar todas las variables de entorno (incluyendo SOLANA_PRIVATE_KEY actualizada)
     cwd: process.cwd(),

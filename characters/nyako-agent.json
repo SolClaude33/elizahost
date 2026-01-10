@@ -96,7 +96,11 @@
       "SOLANA_PRIVATE_KEY": "{{SOLANA_PRIVATE_KEY}}",
       "SOLANA_WALLET_PRIVATE_KEY": "{{SOLANA_PRIVATE_KEY}}",
       "OPENAI_API_KEY": "{{OPENAI_API_KEY}}",
-      "OPENAI_API_BASE_URL": "{{OPENAI_API_BASE_URL}}"
+      "OPENAI_API_BASE_URL": "{{OPENAI_API_BASE_URL}}",
+      "BIRDEYE_API_KEY": "{{BIRDEYE_API_KEY}}",
+      "HELIUS_API_KEY": "{{HELIUS_API_KEY}}",
+      "SOL_ADDRESS": "{{SOL_ADDRESS}}",
+      "SLIPPAGE": "{{SLIPPAGE}}"
     },
     "voice": {
       "model": "Yuki"

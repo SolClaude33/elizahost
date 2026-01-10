@@ -785,6 +785,76 @@ console.log("\n");
       }
     }
     
+    // Actualizar BIRDEYE_API_KEY en settings.secrets (requerido por @elizaos/plugin-solana)
+    // Según documentación: https://docs.birdeye.so/reference/get-defi-price
+    // La API key debe enviarse en el header de las peticiones HTTP
+    if (birdeyeKey) {
+      // Asegurar que secrets existe
+      if (!characterConfig.settings.secrets) {
+        characterConfig.settings.secrets = {};
+      }
+      
+      const currentBirdeyeKey = characterConfig.settings.secrets.BIRDEYE_API_KEY;
+      if (!currentBirdeyeKey || 
+          currentBirdeyeKey === '{{BIRDEYE_API_KEY}}' || 
+          currentBirdeyeKey !== birdeyeKey) {
+        characterConfig.settings.secrets.BIRDEYE_API_KEY = birdeyeKey;
+        needsUpdate = true;
+        console.log("📝 Actualizando secrets.BIRDEYE_API_KEY (requerido por @elizaos/plugin-solana para datos de mercado)...");
+      }
+    } else {
+      console.log("⚠️ BIRDEYE_API_KEY no configurada - El plugin Solana tendrá funcionalidad limitada sin datos de mercado");
+      console.log("   💡 Obtén una API key en: https://birdeye.so/");
+    }
+    
+    // Actualizar HELIUS_API_KEY en settings.secrets si está presente
+    if (heliusKey) {
+      if (!characterConfig.settings.secrets) {
+        characterConfig.settings.secrets = {};
+      }
+      
+      const currentHeliusKey = characterConfig.settings.secrets.HELIUS_API_KEY;
+      if (!currentHeliusKey || 
+          currentHeliusKey === '{{HELIUS_API_KEY}}' || 
+          currentHeliusKey !== heliusKey) {
+        characterConfig.settings.secrets.HELIUS_API_KEY = heliusKey;
+        needsUpdate = true;
+        console.log("📝 Actualizando secrets.HELIUS_API_KEY...");
+      }
+    }
+    
+    // Actualizar SOL_ADDRESS en settings.secrets si está presente
+    if (solAddress) {
+      if (!characterConfig.settings.secrets) {
+        characterConfig.settings.secrets = {};
+      }
+      
+      const currentSolAddress = characterConfig.settings.secrets.SOL_ADDRESS;
+      if (!currentSolAddress || 
+          currentSolAddress === '{{SOL_ADDRESS}}' || 
+          currentSolAddress !== solAddress) {
+        characterConfig.settings.secrets.SOL_ADDRESS = solAddress;
+        needsUpdate = true;
+        console.log("📝 Actualizando secrets.SOL_ADDRESS (requerido por @elizaos/plugin-solana)...");
+      }
+    }
+    
+    // Actualizar SLIPPAGE en settings.secrets si está presente
+    if (slippage) {
+      if (!characterConfig.settings.secrets) {
+        characterConfig.settings.secrets = {};
+      }
+      
+      const currentSlippage = characterConfig.settings.secrets.SLIPPAGE;
+      if (!currentSlippage || 
+          currentSlippage === '{{SLIPPAGE}}' || 
+          currentSlippage !== slippage) {
+        characterConfig.settings.secrets.SLIPPAGE = slippage;
+        needsUpdate = true;
+        console.log("📝 Actualizando secrets.SLIPPAGE (requerido por @elizaos/plugin-solana)...");
+      }
+    }
+    
     if (needsUpdate) {
       fs.writeFileSync(characterPath, JSON.stringify(characterConfig, null, 2), 'utf-8');
       console.log("✅ Archivo de personaje actualizado correctamente con valores reales");

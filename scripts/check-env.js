@@ -519,7 +519,12 @@ console.log("\n");
   // Esto asegura que ElizaOS use los valores reales en lugar de placeholders
   // Permite elegir el personaje mediante variable de entorno ELIZA_CHARACTER_NAME
   // Valores posibles: 'amica-agent', 'nyako-agent' o cualquier otro archivo en ./characters/
-  const characterName = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+  // Normalizar el nombre del personaje: remover .json si está presente
+  let characterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+  // Remover extensión .json si está presente
+  const characterName = characterNameRaw.endsWith('.json') 
+    ? characterNameRaw.slice(0, -5) 
+    : characterNameRaw;
   const characterPath = `./characters/${characterName}.json`;
   console.log(`📋 Usando personaje: ${characterName}`);
   try {
@@ -734,8 +739,12 @@ console.log("\n");
   // VERIFICACIÓN FINAL: Asegurar que el archivo JSON tiene el valor correcto
   try {
     const fs = await import('fs');
-    const characterName = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
-    const characterFilePath = `./characters/${characterName}.json`;
+    // Normalizar el nombre del personaje: remover .json si está presente
+    let verifyCharacterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+    const verifyCharacterName = verifyCharacterNameRaw.endsWith('.json') 
+      ? verifyCharacterNameRaw.slice(0, -5) 
+      : verifyCharacterNameRaw;
+    const characterFilePath = `./characters/${verifyCharacterName}.json`;
     const characterConfig = JSON.parse(fs.readFileSync(characterFilePath, 'utf-8'));
     const jsonKey = characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY;
     
@@ -831,7 +840,11 @@ console.log("\n");
   // Ejecutar elizaos start usando npx (que encontrará el ejecutable correcto)
   // Pasar las variables de entorno actualizadas (incluyendo SOLANA_PRIVATE_KEY convertida)
   // Usar el personaje seleccionado mediante variable de entorno
-  const finalCharacterName = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+  // Normalizar el nombre del personaje: remover .json si está presente
+  let finalCharacterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+  const finalCharacterName = finalCharacterNameRaw.endsWith('.json') 
+    ? finalCharacterNameRaw.slice(0, -5) 
+    : finalCharacterNameRaw;
   const finalCharacterFilePath = `./characters/${finalCharacterName}.json`;
   console.log(`🚀 Iniciando ElizaOS con personaje: ${finalCharacterName}`);
   const elizaosProcess = spawn('npx', ['-y', 'elizaos', 'start', '--character', finalCharacterFilePath], {

@@ -2,26 +2,34 @@
 
 ## 🚨 Variables Faltantes Detectadas
 
-Basado en los logs, estas son las variables que necesitas configurar en Railway:
+Basado en los logs y la confirmación, estas son las variables que **FALTAN** configurar en Railway:
 
-### ✅ Variables Críticas (OBLIGATORIAS)
+### ✅ Variables Críticas que FALTAN (OBLIGATORIAS)
 
-Agrega estas en **Railway > Tu Proyecto > Settings > Variables**:
+Agrega estas **2 variables** en **Railway > Tu Proyecto > Settings > Variables**:
 
 ```env
-# 1. API Key de Grok/XAI (ya deberías tenerla, pero verifica)
-OPENAI_API_KEY=xai-tu_clave_api_grok_aqui
-
-# 2. Dirección del token SOL nativo (valor fijo)
+# 1. Dirección del token SOL nativo (valor fijo) - REQUERIDA
 SOL_ADDRESS=So11111111111111111111111111111111111111112
 
-# 3. Slippage para swaps (1% recomendado)
+# 2. Slippage para swaps (1% recomendado) - REQUERIDA
 SLIPPAGE=100
+```
 
-# 4. API Key de Helius (ya deberías tenerla, pero verifica)
-HELIUS_API_KEY=tu_helius_api_key_aqui
+### ✅ Variables que YA TIENES Configuradas
 
-# 5. API Key de Birdeye (opcional pero recomendado)
+Estas variables ya están configuradas correctamente:
+- ✅ `OPENAI_API_KEY` (o `XAI_API_KEY`) - Ya configurada
+- ✅ `OPENAI_API_BASE_URL` - Ya configurada
+- ✅ `HELIUS_API_KEY` - Ya configurada
+- ✅ `SOLANA_RPC_URL` - Ya configurada
+- ✅ `SOLANA_PUBLIC_KEY` - Ya configurada
+- ✅ `SOLANA_PRIVATE_KEY` - Ya configurada
+
+### ⚠️ Variable Opcional (Recomendada pero NO Obligatoria)
+
+```env
+# 3. API Key de Birdeye (opcional pero recomendado para datos de mercado)
 BIRDEYE_API_KEY=tu_birdeye_api_key_aqui
 ```
 
@@ -35,28 +43,34 @@ BIRDEYE_API_KEY=tu_birdeye_api_key_aqui
 3. Haz clic en **Settings** (ajustes)
 4. Haz clic en **Variables** (variables de entorno)
 
-### Paso 2: Agrega las Variables
+### Paso 2: Agrega SOLO las Variables Faltantes
 
-Haz clic en **+ New Variable** para cada una:
+Haz clic en **+ New Variable** para estas **2 variables críticas**:
 
-#### 1. SOL_ADDRESS
+#### 1. SOL_ADDRESS ⚠️ FALTA - AGREGAR
 - **Nombre:** `SOL_ADDRESS`
 - **Valor:** `So11111111111111111111111111111111111111112`
 - **✅ Crítica - Copiar EXACTO este valor**
 
-#### 2. SLIPPAGE
+#### 2. SLIPPAGE ⚠️ FALTA - AGREGAR
 - **Nombre:** `SLIPPAGE`
 - **Valor:** `100`
 - **✅ Crítica**
 
-#### 3. BIRDEYE_API_KEY (si quieres datos de mercado)
+#### 3. BIRDEYE_API_KEY (Opcional - Recomendado)
 - **Nombre:** `BIRDEYE_API_KEY`
-- **Valor:** Tu API key de Birdeye
-- **⚠️ Opcional pero recomendado**
+- **Valor:** Tu API key de Birdeye (obtener en https://birdeye.so/)
+- **⚠️ Opcional pero recomendado para datos de mercado en tiempo real**
 
-#### 4. Verifica las que ya tienes:
-- `OPENAI_API_KEY` - Debe empezar con `xai-`
-- `HELIUS_API_KEY` - Tu clave de Helius
+### ✅ Variables que YA TIENES (Verificar que estén bien)
+
+Estas variables ya están configuradas, solo verifica que estén correctas:
+- ✅ `OPENAI_API_KEY` o `XAI_API_KEY` - Debe empezar con `xai-`
+- ✅ `OPENAI_API_BASE_URL` - Debe ser `https://api.x.ai/v1` para Grok
+- ✅ `HELIUS_API_KEY` - Ya configurada
+- ✅ `SOLANA_RPC_URL` - Ya configurada
+- ✅ `SOLANA_PUBLIC_KEY` - Ya configurada
+- ✅ `SOLANA_PRIVATE_KEY` - Ya configurada
 
 ### Paso 3: Guardar y Redeploy
 
@@ -97,19 +111,25 @@ Después de agregar las variables y hacer redeploy, verifica los logs en Railway
 
 | Variable | Requerida | Valor | Estado |
 |----------|-----------|-------|--------|
-| `OPENAI_API_KEY` | ✅ Sí | `xai-...` | Verificar que exista |
-| `SOL_ADDRESS` | ✅ Sí | `So11111111111111111111111111111111111111112` | **Agregar** |
-| `SLIPPAGE` | ✅ Sí | `100` | **Agregar** |
-| `HELIUS_API_KEY` | ✅ Sí | `tu_key` | Verificar que exista |
-| `BIRDEYE_API_KEY` | ⚠️ Recomendado | `tu_key` | **Agregar** (opcional) |
+| `OPENAI_API_KEY` / `XAI_API_KEY` | ✅ Sí | `xai-...` | ✅ **Ya configurada** |
+| `OPENAI_API_BASE_URL` | ✅ Sí | `https://api.x.ai/v1` | ✅ **Ya configurada** |
+| `HELIUS_API_KEY` | ✅ Sí | `tu_key` | ✅ **Ya configurada** |
+| `SOLANA_RPC_URL` | ✅ Sí | `https://...` | ✅ **Ya configurada** |
+| `SOLANA_PUBLIC_KEY` | ✅ Sí | `tu_key` | ✅ **Ya configurada** |
+| `SOLANA_PRIVATE_KEY` | ✅ Sí | `tu_key` | ✅ **Ya configurada** |
+| `SOL_ADDRESS` | ✅ Sí | `So11111111111111111111111111111111111111112` | ⚠️ **FALTA - Agregar** |
+| `SLIPPAGE` | ✅ Sí | `100` | ⚠️ **FALTA - Agregar** |
+| `BIRDEYE_API_KEY` | ⚠️ Opcional | `tu_key` | ⚠️ **Opcional - Agregar si quieres** |
 
 ---
 
 ## ⚡ Acción Inmediata
 
-**Agrega estas dos variables ahora mismo:**
+**Solo necesitas agregar estas 2 variables:**
 
 1. `SOL_ADDRESS=So11111111111111111111111111111111111111112`
 2. `SLIPPAGE=100`
+
+**Las demás variables ya las tienes configuradas correctamente! ✅**
 
 Después de agregarlas, haz **Redeploy** en Railway y verifica que no haya más errores en los logs.

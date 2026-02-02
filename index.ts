@@ -12,10 +12,14 @@ const __dirname = path.dirname(__filename);
 // Función principal
 async function main() {
   try {
-    console.log("🚀 Iniciando AMICA Agent...");
+    console.log("🚀 Iniciando ElizaOS Agent...");
     
     const port = process.env.PORT || "3000";
-    const characterPath = path.join(__dirname, "characters", "amica-agent.json");
+    const characterNameRaw = process.env.ELIZA_CHARACTER_NAME || "niya-agent";
+    const characterName = characterNameRaw.endsWith(".json")
+      ? characterNameRaw.slice(0, -5)
+      : characterNameRaw;
+    const characterPath = path.join(__dirname, "characters", `${characterName}.json`);
     
     // Verificar que el archivo de personaje existe
     try {
@@ -44,9 +48,11 @@ async function main() {
       console.log("\n🔐 Variables de entorno:");
       const hasOpenAI = !!process.env.OPENAI_API_KEY;
       const hasSolana = !!(process.env.SOLANA_RPC_URL && process.env.SOLANA_PUBLIC_KEY);
+      const hasEvm = !!(process.env.BNB_RPC_URL && process.env.BNB_WALLET_ADDRESS);
       const hasTwitter = !!(process.env.X_API_KEY && process.env.X_ACCESS_TOKEN);
       console.log(`   OpenAI: ${hasOpenAI ? "✅" : "❌"}`);
       console.log(`   Solana: ${hasSolana ? "✅" : "❌"}`);
+      console.log(`   EVM/BNB: ${hasEvm ? "✅" : "❌"}`);
       console.log(`   Twitter: ${hasTwitter ? "✅" : "❌"}`);
       console.log("   (Las variables aún no están configuradas)");
       
@@ -211,7 +217,7 @@ async function main() {
           }
         }
         
-        console.log(`\n✅ AMICA Agent configurado (puerto ${port})`);
+        console.log(`\n✅ Agent configurado (puerto ${port})`);
       } else if (ServiceBuilder) {
         console.log("📦 Usando ServiceBuilder...");
         
@@ -270,7 +276,7 @@ async function main() {
           setInterval(() => {}, 1000);
         }
         
-        console.log(`\n✅ AMICA Agent configurado (puerto ${port})`);
+        console.log(`\n✅ Agent configurado (puerto ${port})`);
       } else {
         // Fallback: usar AgentRuntime solo para mantener la instancia viva
         const AgentRuntime = (elizaCore as any).AgentRuntime;
@@ -286,7 +292,7 @@ async function main() {
           
           // Mantener el proceso vivo
           setInterval(() => {}, 1000);
-          console.log(`✅ AMICA Agent ejecutándose en puerto ${port}`);
+          console.log(`✅ Agent ejecutándose en puerto ${port}`);
         } else {
           throw new Error("No se encontraron métodos de inicio válidos. Exportaciones: " + Object.keys(elizaCore).join(", "));
         }

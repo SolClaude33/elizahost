@@ -24,6 +24,11 @@ async function main() {
       'OPENAI_API_BASE_URL',
       'OPENAI_BASE_URL', // Variable alternativa que algunos plugins pueden usar
       'OPENAI_MODEL',
+      // Variables EVM / BNB Chain
+      'BNB_RPC_URL',
+      'BNB_WALLET_ADDRESS',
+      'BNB_PRIVATE_KEY',
+      'DEXSCREENER_API_KEY',
       // Variables de Solana
       'SOLANA_RPC_URL',
       'SOLANA_PUBLIC_KEY',
@@ -108,16 +113,49 @@ async function main() {
   
 console.log("\n🔍 Verificando variables de entorno de Railway...\n");
 
+// Detectar personaje seleccionado y plugins, para requerir SOLO las variables necesarias
+// Valores típicos: 'niya-agent', 'amica-agent', etc. (sin extensión) o con '.json'
+let selectedCharacterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'niya-agent';
+const selectedCharacterName = selectedCharacterNameRaw.endsWith('.json')
+  ? selectedCharacterNameRaw.slice(0, -5)
+  : selectedCharacterNameRaw;
+// Compatibilidad: si aún usas 'nyako-agent', mapear a 'niya-agent'
+const normalizedSelectedCharacterName = selectedCharacterName === 'nyako-agent'
+  ? 'niya-agent'
+  : selectedCharacterName;
+const selectedCharacterPath = `./characters/${normalizedSelectedCharacterName}.json`;
+
+let selectedPlugins = [];
+try {
+  const fsModule = await import('fs');
+  const selectedCharacterConfig = JSON.parse(fsModule.readFileSync(selectedCharacterPath, 'utf-8'));
+  if (Array.isArray(selectedCharacterConfig?.plugins)) {
+    selectedPlugins = selectedCharacterConfig.plugins;
+  }
+} catch (e) {
+  console.log(`⚠️ No se pudo leer '${selectedCharacterPath}' para detectar plugins (continuando igual).`);
+}
+
+const usesSolana = selectedPlugins.includes('@elizaos/plugin-solana');
+const usesEvm = selectedPlugins.includes('@elizaos/plugin-evm');
+
 const requiredVars = [
   // Verificar XAI_API_KEY primero, luego OPENAI_API_KEY como fallback
   ...(process.env.XAI_API_KEY ? ['XAI_API_KEY'] : ['OPENAI_API_KEY']),
   'OPENAI_API_BASE_URL',
-  'SOLANA_RPC_URL',
-  'SOLANA_PUBLIC_KEY',
-  'SOLANA_PRIVATE_KEY',
-  'SOL_ADDRESS', // Requerido por @elizaos/plugin-solana
-  'SLIPPAGE', // Requerido por @elizaos/plugin-solana
-  'HELIUS_API_KEY' // Requerido por @elizaos/plugin-solana
+  ...(usesSolana ? [
+    'SOLANA_RPC_URL',
+    'SOLANA_PUBLIC_KEY',
+    'SOLANA_PRIVATE_KEY',
+    'SOL_ADDRESS', // Requerido por @elizaos/plugin-solana
+    'SLIPPAGE', // Requerido por @elizaos/plugin-solana
+    'HELIUS_API_KEY' // Requerido por @elizaos/plugin-solana
+  ] : []),
+  ...(usesEvm ? [
+    'BNB_RPC_URL',
+    'BNB_WALLET_ADDRESS',
+    'BNB_PRIVATE_KEY'
+  ] : [])
 ];
 
 const optionalVars = [
@@ -125,7 +163,11 @@ const optionalVars = [
   'OPENAI_MODEL', // Modelo genérico (puede ser usado como fallback)
   'TWITTER_API_KEY',
   'TWITTER_API_SECRET_KEY',
-  'BIRDEYE_API_KEY', // Recomendado por @elizaos/plugin-solana para datos de mercado
+  'TWITTER_ACCESS_TOKEN',
+  'TWITTER_ACCESS_TOKEN_SECRET',
+  'TWITTER_BEARER_TOKEN',
+  ...(usesSolana ? ['BIRDEYE_API_KEY'] : []), // Recomendado por @elizaos/plugin-solana
+  ...(usesEvm ? ['DEXSCREENER_API_KEY'] : []), // Opcional para consultas de mercado
   'ELEVENLABS_API_KEY' // Solo si usas @elizaos/plugin-elevenlabs
 ];
 
@@ -222,6 +264,61 @@ if (openAIKey && openAIKey.startsWith('xai-')) {
   console.log("   ✅ Configuradas ambas variables (OPENAI_API_BASE_URL y OPENAI_BASE_URL) para compatibilidad");
 }
 
+// Validaciones específicas por plugin (según el personaje seleccionado)
+if (usesEvm) {
+  console.log("\n🔍 Validación EVM / BNB:");
+
+  const bnbRpcUrl = cleanEnvVar(process.env.BNB_RPC_URL || '');
+  if (!bnbRpcUrl) {
+    console.log("   ❌ BNB_RPC_URL: NO CONFIGURADA");
+  } else if (!/^https?:\/\//i.test(bnbRpcUrl)) {
+    console.log(`   ⚠️ BNB_RPC_URL: '${bnbRpcUrl}' no parece una URL http(s) válida`);
+  } else {
+    process.env.BNB_RPC_URL = bnbRpcUrl;
+    console.log(`   ✅ BNB_RPC_URL: Configurada (${bnbRpcUrl.substring(0, 30)}...)`);
+  }
+
+  const bnbWallet = cleanEnvVar(process.env.BNB_WALLET_ADDRESS || '');
+  if (!bnbWallet) {
+    console.log("   ❌ BNB_WALLET_ADDRESS: NO CONFIGURADA");
+  } else {
+    const normalizedWallet = bnbWallet.trim();
+    const isValidWallet = /^0x[a-fA-F0-9]{40}$/.test(normalizedWallet);
+    if (!isValidWallet) {
+      console.log("   ⚠️ BNB_WALLET_ADDRESS: Formato esperado '0x' + 40 caracteres hex");
+    } else {
+      console.log("   ✅ BNB_WALLET_ADDRESS: Formato válido");
+    }
+    process.env.BNB_WALLET_ADDRESS = normalizedWallet;
+  }
+
+  const bnbPrivateKeyRaw = cleanEnvVar(process.env.BNB_PRIVATE_KEY || '');
+  if (!bnbPrivateKeyRaw) {
+    console.log("   ❌ BNB_PRIVATE_KEY: NO CONFIGURADA");
+  } else {
+    let key = bnbPrivateKeyRaw.replace(/"/g, '').trim();
+    if (key.startsWith('0x') || key.startsWith('0X')) {
+      key = key.slice(2);
+    }
+    const isValidKey = /^[a-fA-F0-9]{64}$/.test(key);
+    if (!isValidKey) {
+      console.log("   ⚠️ BNB_PRIVATE_KEY: Debe ser 32 bytes hex (64 chars), con o sin prefijo 0x");
+    } else {
+      console.log("   ✅ BNB_PRIVATE_KEY: Formato hex válido (32 bytes)");
+    }
+    // Normalizar a 0x + minúsculas (muchas libs EVM esperan este formato)
+    process.env.BNB_PRIVATE_KEY = `0x${key.toLowerCase()}`;
+  }
+
+  const dexscreenerKey = cleanEnvVar(process.env.DEXSCREENER_API_KEY || '');
+  if (dexscreenerKey) {
+    console.log(`   ✅ DEXSCREENER_API_KEY: Configurada (${dexscreenerKey.substring(0, 8)}...)`);
+  } else {
+    console.log("   ⚠️ DEXSCREENER_API_KEY: No configurada (opcional)");
+  }
+}
+
+if (usesSolana) {
 // Validar Solana Private Key
 const solanaKey = (process.env.SOLANA_PRIVATE_KEY || '').trim();
 if (solanaKey) {
@@ -576,25 +673,32 @@ if (!heliusKey) {
 } else {
   console.log(`   ✅ HELIUS_API_KEY: Configurada (${heliusKey.substring(0, 8)}...)`);
 }
+} // end usesSolana
 
 console.log("\n");
   
   // Después de validar y convertir las variables, actualizar el archivo de personaje si es necesario
   // Esto asegura que ElizaOS use los valores reales en lugar de placeholders
   // Permite elegir el personaje mediante variable de entorno ELIZA_CHARACTER_NAME
-  // Valores posibles: 'amica-agent', 'nyako-agent' o cualquier otro archivo en ./characters/
+  // Valores posibles: 'niya-agent', 'amica-agent' o cualquier otro archivo en ./characters/
   // Normalizar el nombre del personaje: remover .json si está presente
-  let characterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+  let characterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'niya-agent';
   // Remover extensión .json si está presente
   const characterName = characterNameRaw.endsWith('.json') 
     ? characterNameRaw.slice(0, -5) 
     : characterNameRaw;
-  const characterPath = `./characters/${characterName}.json`;
-  console.log(`📋 Usando personaje: ${characterName}`);
+  const normalizedCharacterName = characterName === 'nyako-agent' ? 'niya-agent' : characterName;
+  const characterPath = `./characters/${normalizedCharacterName}.json`;
+  console.log(`📋 Usando personaje: ${normalizedCharacterName}`);
   try {
     const fs = await import('fs');
     const characterConfig = JSON.parse(fs.readFileSync(characterPath, 'utf-8'));
     let needsUpdate = false;
+
+    // Detectar plugins del personaje para evitar mezclar variables (Solana vs EVM)
+    const characterPlugins = Array.isArray(characterConfig?.plugins) ? characterConfig.plugins : [];
+    const characterUsesSolana = characterPlugins.includes('@elizaos/plugin-solana');
+    const characterUsesEvm = characterPlugins.includes('@elizaos/plugin-evm');
     
     // Declarar apiKeyToUse una sola vez al inicio para reutilizarla en todo el scope
     // Priorizar XAI_API_KEY si existe, sino usar OPENAI_API_KEY
@@ -680,84 +784,86 @@ console.log("\n");
       }
     }
     
-    // Actualizar SOLANA_PRIVATE_KEY en settings.secrets si está presente
-    // Según la documentación de ElizaOS, puede usar SOLANA_PRIVATE_KEY o SOLANA_WALLET_PRIVATE_KEY
-    if (process.env.SOLANA_PRIVATE_KEY) {
-      const newValue = process.env.SOLANA_PRIVATE_KEY;
-      
-      // Asegurar que settings.secrets existe
-      if (!characterConfig.settings.secrets) {
-        characterConfig.settings.secrets = {};
-      }
-      
-      // Actualizar SOLANA_PRIVATE_KEY
-      const currentValue = characterConfig.settings.secrets.SOLANA_PRIVATE_KEY;
-      if (currentValue === '{{SOLANA_PRIVATE_KEY}}' || currentValue !== newValue) {
-        characterConfig.settings.secrets.SOLANA_PRIVATE_KEY = newValue;
-        needsUpdate = true;
-        console.log("📝 Actualizando archivo de personaje con SOLANA_PRIVATE_KEY convertida...");
+    if (characterUsesSolana) {
+      // Actualizar SOLANA_PRIVATE_KEY en settings.secrets si está presente
+      // Según la documentación de ElizaOS, puede usar SOLANA_PRIVATE_KEY o SOLANA_WALLET_PRIVATE_KEY
+      if (process.env.SOLANA_PRIVATE_KEY) {
+        const newValue = process.env.SOLANA_PRIVATE_KEY;
         
-        // Logging detallado para debugging
-        try {
-          const bs58Module = await import('bs58');
-          const bs58 = bs58Module.default || bs58Module;
-          const decoded = bs58.decode(newValue);
-          console.log(`   📋 Valor guardado en JSON: ${newValue.substring(0, 10)}...${newValue.substring(newValue.length - 5)} (${newValue.length} chars, ${decoded.length} bytes decodificados)`);
-          console.log(`   📋 Esto es lo que el plugin de Solana leerá desde settings.secrets.SOLANA_PRIVATE_KEY`);
-        } catch (decodeError) {
-          console.log(`   ⚠️ No se pudo decodificar para verificar (esto es solo para logging)`);
+        // Asegurar que settings.secrets existe
+        if (!characterConfig.settings.secrets) {
+          characterConfig.settings.secrets = {};
         }
-      } else {
-        console.log("   ✅ SOLANA_PRIVATE_KEY en JSON ya está actualizada");
-      }
-      
-      // También actualizar SOLANA_WALLET_PRIVATE_KEY como alternativa (según docs de ElizaOS)
-      const currentWalletKey = characterConfig.settings.secrets.SOLANA_WALLET_PRIVATE_KEY;
-      if (!currentWalletKey || currentWalletKey === '{{SOLANA_WALLET_PRIVATE_KEY}}' || currentWalletKey !== newValue) {
-        characterConfig.settings.secrets.SOLANA_WALLET_PRIVATE_KEY = newValue;
-        needsUpdate = true;
-        console.log("📝 Actualizando SOLANA_WALLET_PRIVATE_KEY en settings.secrets (alternativa soportada por ElizaOS)...");
-      }
-    }
-    
-    // Actualizar SOLANA_PUBLIC_KEY en settings.secrets si está presente
-    if (characterConfig.settings?.secrets?.SOLANA_PUBLIC_KEY && process.env.SOLANA_PUBLIC_KEY) {
-      const currentValue = characterConfig.settings.secrets.SOLANA_PUBLIC_KEY;
-      if (currentValue === '{{SOLANA_PUBLIC_KEY}}' || currentValue !== process.env.SOLANA_PUBLIC_KEY) {
-        characterConfig.settings.secrets.SOLANA_PUBLIC_KEY = process.env.SOLANA_PUBLIC_KEY;
-        needsUpdate = true;
-        console.log("📝 Actualizando archivo de personaje con SOLANA_PUBLIC_KEY...");
-      }
-    }
-    
-    // CRÍTICO: Agregar la dirección de wallet al bio para que el agente sepa cuál es su wallet
-    if (process.env.SOLANA_PUBLIC_KEY) {
-      const walletAddress = process.env.SOLANA_PUBLIC_KEY.trim();
-      const walletInfoLine = `My Solana wallet address is: ${walletAddress}`;
-      
-      // Asegurar que bio existe y es un array
-      if (!characterConfig.bio || !Array.isArray(characterConfig.bio)) {
-        characterConfig.bio = [];
-      }
-      
-      // Buscar si ya existe una línea con la dirección de wallet
-      const walletInfoIndex = characterConfig.bio.findIndex(line => 
-        line.includes('My Solana wallet address is:') || 
-        line.includes('wallet address is:')
-      );
-      
-      if (walletInfoIndex >= 0) {
-        // Actualizar la línea existente si es diferente
-        if (characterConfig.bio[walletInfoIndex] !== walletInfoLine) {
-          characterConfig.bio[walletInfoIndex] = walletInfoLine;
+        
+        // Actualizar SOLANA_PRIVATE_KEY
+        const currentValue = characterConfig.settings.secrets.SOLANA_PRIVATE_KEY;
+        if (currentValue === '{{SOLANA_PRIVATE_KEY}}' || currentValue !== newValue) {
+          characterConfig.settings.secrets.SOLANA_PRIVATE_KEY = newValue;
           needsUpdate = true;
-          console.log("📝 Actualizando dirección de wallet en bio del personaje...");
+          console.log("📝 Actualizando archivo de personaje con SOLANA_PRIVATE_KEY convertida...");
+          
+          // Logging detallado para debugging
+          try {
+            const bs58Module = await import('bs58');
+            const bs58 = bs58Module.default || bs58Module;
+            const decoded = bs58.decode(newValue);
+            console.log(`   📋 Valor guardado en JSON: ${newValue.substring(0, 10)}...${newValue.substring(newValue.length - 5)} (${newValue.length} chars, ${decoded.length} bytes decodificados)`);
+            console.log(`   📋 Esto es lo que el plugin de Solana leerá desde settings.secrets.SOLANA_PRIVATE_KEY`);
+          } catch (decodeError) {
+            console.log(`   ⚠️ No se pudo decodificar para verificar (esto es solo para logging)`);
+          }
+        } else {
+          console.log("   ✅ SOLANA_PRIVATE_KEY en JSON ya está actualizada");
         }
-      } else {
-        // Agregar nueva línea al bio
-        characterConfig.bio.push(walletInfoLine);
-        needsUpdate = true;
-        console.log("📝 Agregando dirección de wallet al bio del personaje para que el agente pueda responder preguntas sobre su wallet...");
+        
+        // También actualizar SOLANA_WALLET_PRIVATE_KEY como alternativa (según docs de ElizaOS)
+        const currentWalletKey = characterConfig.settings.secrets.SOLANA_WALLET_PRIVATE_KEY;
+        if (!currentWalletKey || currentWalletKey === '{{SOLANA_WALLET_PRIVATE_KEY}}' || currentWalletKey !== newValue) {
+          characterConfig.settings.secrets.SOLANA_WALLET_PRIVATE_KEY = newValue;
+          needsUpdate = true;
+          console.log("📝 Actualizando SOLANA_WALLET_PRIVATE_KEY en settings.secrets (alternativa soportada por ElizaOS)...");
+        }
+      }
+      
+      // Actualizar SOLANA_PUBLIC_KEY en settings.secrets si está presente
+      if (characterConfig.settings?.secrets?.SOLANA_PUBLIC_KEY && process.env.SOLANA_PUBLIC_KEY) {
+        const currentValue = characterConfig.settings.secrets.SOLANA_PUBLIC_KEY;
+        if (currentValue === '{{SOLANA_PUBLIC_KEY}}' || currentValue !== process.env.SOLANA_PUBLIC_KEY) {
+          characterConfig.settings.secrets.SOLANA_PUBLIC_KEY = process.env.SOLANA_PUBLIC_KEY;
+          needsUpdate = true;
+          console.log("📝 Actualizando archivo de personaje con SOLANA_PUBLIC_KEY...");
+        }
+      }
+      
+      // CRÍTICO: Agregar la dirección de wallet al bio para que el agente sepa cuál es su wallet
+      if (process.env.SOLANA_PUBLIC_KEY) {
+        const walletAddress = process.env.SOLANA_PUBLIC_KEY.trim();
+        const walletInfoLine = `My Solana wallet address is: ${walletAddress}`;
+        
+        // Asegurar que bio existe y es un array
+        if (!characterConfig.bio || !Array.isArray(characterConfig.bio)) {
+          characterConfig.bio = [];
+        }
+        
+        // Buscar si ya existe una línea con la dirección de wallet
+        const walletInfoIndex = characterConfig.bio.findIndex(line => 
+          line.includes('My Solana wallet address is:') || 
+          line.includes('wallet address is:')
+        );
+        
+        if (walletInfoIndex >= 0) {
+          // Actualizar la línea existente si es diferente
+          if (characterConfig.bio[walletInfoIndex] !== walletInfoLine) {
+            characterConfig.bio[walletInfoIndex] = walletInfoLine;
+            needsUpdate = true;
+            console.log("📝 Actualizando dirección de wallet en bio del personaje...");
+          }
+        } else {
+          // Agregar nueva línea al bio
+          characterConfig.bio.push(walletInfoLine);
+          needsUpdate = true;
+          console.log("📝 Agregando dirección de wallet al bio del personaje para que el agente pueda responder preguntas sobre su wallet...");
+        }
       }
     }
     
@@ -785,73 +891,143 @@ console.log("\n");
       }
     }
     
-    // Actualizar BIRDEYE_API_KEY en settings.secrets (requerido por @elizaos/plugin-solana)
-    // Según documentación: https://docs.birdeye.so/reference/get-defi-price
-    // La API key debe enviarse en el header de las peticiones HTTP
-    if (birdeyeKey) {
-      // Asegurar que secrets existe
+    if (characterUsesEvm) {
       if (!characterConfig.settings.secrets) {
         characterConfig.settings.secrets = {};
       }
-      
-      const currentBirdeyeKey = characterConfig.settings.secrets.BIRDEYE_API_KEY;
-      if (!currentBirdeyeKey || 
-          currentBirdeyeKey === '{{BIRDEYE_API_KEY}}' || 
-          currentBirdeyeKey !== birdeyeKey) {
-        characterConfig.settings.secrets.BIRDEYE_API_KEY = birdeyeKey;
-        needsUpdate = true;
-        console.log("📝 Actualizando secrets.BIRDEYE_API_KEY (requerido por @elizaos/plugin-solana para datos de mercado)...");
+
+      const bnbRpcUrl = cleanEnvVar(process.env.BNB_RPC_URL || '');
+      if (bnbRpcUrl) {
+        const current = characterConfig.settings.secrets.BNB_RPC_URL;
+        if (!current || current === '{{BNB_RPC_URL}}' || current !== bnbRpcUrl) {
+          characterConfig.settings.secrets.BNB_RPC_URL = bnbRpcUrl;
+          needsUpdate = true;
+          console.log("📝 Actualizando secrets.BNB_RPC_URL...");
+        }
       }
-    } else {
-      console.log("⚠️ BIRDEYE_API_KEY no configurada - El plugin Solana tendrá funcionalidad limitada sin datos de mercado");
-      console.log("   💡 Obtén una API key en: https://birdeye.so/");
+
+      const bnbWalletAddress = cleanEnvVar(process.env.BNB_WALLET_ADDRESS || '');
+      if (bnbWalletAddress) {
+        const current = characterConfig.settings.secrets.BNB_WALLET_ADDRESS;
+        if (!current || current === '{{BNB_WALLET_ADDRESS}}' || current !== bnbWalletAddress) {
+          characterConfig.settings.secrets.BNB_WALLET_ADDRESS = bnbWalletAddress;
+          needsUpdate = true;
+          console.log("📝 Actualizando secrets.BNB_WALLET_ADDRESS...");
+        }
+
+        // Agregar/actualizar línea de wallet en el bio (BNB)
+        const walletInfoLine = `My BNB wallet address is: ${bnbWalletAddress.trim()}`;
+        if (!characterConfig.bio || !Array.isArray(characterConfig.bio)) {
+          characterConfig.bio = [];
+        }
+        const walletInfoIndex = characterConfig.bio.findIndex(line =>
+          typeof line === 'string' && line.includes('My BNB wallet address is:')
+        );
+        if (walletInfoIndex >= 0) {
+          if (characterConfig.bio[walletInfoIndex] !== walletInfoLine) {
+            characterConfig.bio[walletInfoIndex] = walletInfoLine;
+            needsUpdate = true;
+            console.log("📝 Actualizando dirección de wallet (BNB) en bio del personaje...");
+          }
+        } else {
+          characterConfig.bio.push(walletInfoLine);
+          needsUpdate = true;
+          console.log("📝 Agregando dirección de wallet (BNB) al bio del personaje...");
+        }
+      }
+
+      const bnbPrivateKey = cleanEnvVar(process.env.BNB_PRIVATE_KEY || '');
+      if (bnbPrivateKey) {
+        const current = characterConfig.settings.secrets.BNB_PRIVATE_KEY;
+        if (!current || current === '{{BNB_PRIVATE_KEY}}' || current !== bnbPrivateKey) {
+          characterConfig.settings.secrets.BNB_PRIVATE_KEY = bnbPrivateKey;
+          needsUpdate = true;
+          console.log("📝 Actualizando secrets.BNB_PRIVATE_KEY...");
+        }
+      }
+
+      const dexscreenerKey = cleanEnvVar(process.env.DEXSCREENER_API_KEY || '');
+      if (dexscreenerKey) {
+        const current = characterConfig.settings.secrets.DEXSCREENER_API_KEY;
+        if (!current || current === '{{DEXSCREENER_API_KEY}}' || current !== dexscreenerKey) {
+          characterConfig.settings.secrets.DEXSCREENER_API_KEY = dexscreenerKey;
+          needsUpdate = true;
+          console.log("📝 Actualizando secrets.DEXSCREENER_API_KEY...");
+        }
+      }
     }
-    
-    // Actualizar HELIUS_API_KEY en settings.secrets si está presente
-    if (heliusKey) {
-      if (!characterConfig.settings.secrets) {
-        characterConfig.settings.secrets = {};
+
+    if (characterUsesSolana) {
+      const birdeyeKey = cleanEnvVar(process.env.BIRDEYE_API_KEY || '');
+      const heliusKey = cleanEnvVar(process.env.HELIUS_API_KEY || '');
+
+      // SOL_ADDRESS (requerido por @elizaos/plugin-solana) - asegurar valor por defecto correcto
+      let solAddress = cleanEnvVar(process.env.SOL_ADDRESS || '');
+      const defaultSolAddress = 'So11111111111111111111111111111111111111112';
+      if (!solAddress) {
+        process.env.SOL_ADDRESS = defaultSolAddress;
+        solAddress = defaultSolAddress;
+      } else if (solAddress !== defaultSolAddress) {
+        process.env.SOL_ADDRESS = defaultSolAddress;
+        solAddress = defaultSolAddress;
       }
-      
-      const currentHeliusKey = characterConfig.settings.secrets.HELIUS_API_KEY;
-      if (!currentHeliusKey || 
-          currentHeliusKey === '{{HELIUS_API_KEY}}' || 
-          currentHeliusKey !== heliusKey) {
-        characterConfig.settings.secrets.HELIUS_API_KEY = heliusKey;
-        needsUpdate = true;
-        console.log("📝 Actualizando secrets.HELIUS_API_KEY...");
+
+      // SLIPPAGE (requerido por @elizaos/plugin-solana)
+      let slippage = cleanEnvVar(process.env.SLIPPAGE || '');
+      const defaultSlippage = '100';
+      if (!slippage) {
+        process.env.SLIPPAGE = defaultSlippage;
+        slippage = defaultSlippage;
       }
-    }
-    
-    // Actualizar SOL_ADDRESS en settings.secrets si está presente
-    if (solAddress) {
-      if (!characterConfig.settings.secrets) {
-        characterConfig.settings.secrets = {};
+
+      // Actualizar BIRDEYE_API_KEY en settings.secrets (recomendado por @elizaos/plugin-solana)
+      if (birdeyeKey) {
+        const currentBirdeyeKey = characterConfig.settings.secrets.BIRDEYE_API_KEY;
+        if (!currentBirdeyeKey ||
+            currentBirdeyeKey === '{{BIRDEYE_API_KEY}}' ||
+            currentBirdeyeKey !== birdeyeKey) {
+          characterConfig.settings.secrets.BIRDEYE_API_KEY = birdeyeKey;
+          needsUpdate = true;
+          console.log("📝 Actualizando secrets.BIRDEYE_API_KEY (plugin Solana)...");
+        }
+      } else {
+        console.log("⚠️ BIRDEYE_API_KEY no configurada - El plugin Solana tendrá funcionalidad limitada sin datos de mercado");
       }
-      
-      const currentSolAddress = characterConfig.settings.secrets.SOL_ADDRESS;
-      if (!currentSolAddress || 
-          currentSolAddress === '{{SOL_ADDRESS}}' || 
-          currentSolAddress !== solAddress) {
-        characterConfig.settings.secrets.SOL_ADDRESS = solAddress;
-        needsUpdate = true;
-        console.log("📝 Actualizando secrets.SOL_ADDRESS (requerido por @elizaos/plugin-solana)...");
+
+      // Actualizar HELIUS_API_KEY en settings.secrets si está presente
+      if (heliusKey) {
+        const currentHeliusKey = characterConfig.settings.secrets.HELIUS_API_KEY;
+        if (!currentHeliusKey ||
+            currentHeliusKey === '{{HELIUS_API_KEY}}' ||
+            currentHeliusKey !== heliusKey) {
+          characterConfig.settings.secrets.HELIUS_API_KEY = heliusKey;
+          needsUpdate = true;
+          console.log("📝 Actualizando secrets.HELIUS_API_KEY...");
+        }
       }
-    }
-    
-    // Actualizar SLIPPAGE en settings.secrets si está presente
-    if (slippage) {
-      if (!characterConfig.settings.secrets) {
-        characterConfig.settings.secrets = {};
+
+      // Actualizar SOL_ADDRESS en settings.secrets
+      if (solAddress) {
+        const currentSolAddress = characterConfig.settings.secrets.SOL_ADDRESS;
+        if (!currentSolAddress ||
+            currentSolAddress === '{{SOL_ADDRESS}}' ||
+            currentSolAddress !== solAddress) {
+          characterConfig.settings.secrets.SOL_ADDRESS = solAddress;
+          needsUpdate = true;
+          console.log("📝 Actualizando secrets.SOL_ADDRESS (plugin Solana)...");
+        }
       }
-      
-      const currentSlippage = characterConfig.settings.secrets.SLIPPAGE;
-      if (!currentSlippage || 
-          currentSlippage === '{{SLIPPAGE}}' || 
-          currentSlippage !== slippage) {
-        characterConfig.settings.secrets.SLIPPAGE = slippage;
-        needsUpdate = true;
-        console.log("📝 Actualizando secrets.SLIPPAGE (requerido por @elizaos/plugin-solana)...");
+
+      // Actualizar SLIPPAGE en settings.secrets
+      if (slippage) {
+        const currentSlippage = characterConfig.settings.secrets.SLIPPAGE;
+        if (!currentSlippage ||
+            currentSlippage === '{{SLIPPAGE}}' ||
+            currentSlippage !== slippage) {
+          characterConfig.settings.secrets.SLIPPAGE = slippage;
+          needsUpdate = true;
+          console.log("📝 Actualizando secrets.SLIPPAGE (plugin Solana)...");
+        }
       }
     }
     
@@ -874,30 +1050,58 @@ console.log("\n");
   try {
     const fs = await import('fs');
     // Normalizar el nombre del personaje: remover .json si está presente
-    let verifyCharacterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+    let verifyCharacterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'niya-agent';
     const verifyCharacterName = verifyCharacterNameRaw.endsWith('.json') 
       ? verifyCharacterNameRaw.slice(0, -5) 
       : verifyCharacterNameRaw;
-    const characterFilePath = `./characters/${verifyCharacterName}.json`;
+    const normalizedVerifyCharacterName = verifyCharacterName === 'nyako-agent' ? 'niya-agent' : verifyCharacterName;
+    const characterFilePath = `./characters/${normalizedVerifyCharacterName}.json`;
     const characterConfig = JSON.parse(fs.readFileSync(characterFilePath, 'utf-8'));
-    const jsonKey = characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY;
-    
-    if (jsonKey && process.env.SOLANA_PRIVATE_KEY) {
-      if (jsonKey === process.env.SOLANA_PRIVATE_KEY) {
-        console.log("✅ VERIFICACIÓN FINAL: El archivo JSON tiene la misma clave que process.env");
-        try {
-          const bs58Module = await import('bs58');
-          const bs58 = bs58Module.default || bs58Module;
-          const decoded = bs58.decode(jsonKey);
-          console.log(`   📋 Valor en JSON: ${decoded.length} bytes decodificados (${jsonKey.length} chars en base58)`);
-          console.log(`   📋 Esto es exactamente lo que el plugin de Solana leerá desde settings.secrets.SOLANA_PRIVATE_KEY`);
-        } catch (e) {
-          // Ignorar error de decodificación para logging
+
+    const plugins = Array.isArray(characterConfig?.plugins) ? characterConfig.plugins : [];
+    const verifySolana = plugins.includes('@elizaos/plugin-solana');
+    const verifyEvm = plugins.includes('@elizaos/plugin-evm');
+
+    if (verifySolana) {
+      const jsonKey = characterConfig.settings?.secrets?.SOLANA_PRIVATE_KEY;
+      if (jsonKey && process.env.SOLANA_PRIVATE_KEY) {
+        if (jsonKey === process.env.SOLANA_PRIVATE_KEY) {
+          console.log("✅ VERIFICACIÓN FINAL: (Solana) El archivo JSON tiene la misma clave que process.env");
+          try {
+            const bs58Module = await import('bs58');
+            const bs58 = bs58Module.default || bs58Module;
+            const decoded = bs58.decode(jsonKey);
+            console.log(`   📋 Valor en JSON: ${decoded.length} bytes decodificados (${jsonKey.length} chars en base58)`);
+            console.log(`   📋 Esto es exactamente lo que el plugin de Solana leerá desde settings.secrets.SOLANA_PRIVATE_KEY`);
+          } catch (e) {
+            // Ignorar error de decodificación para logging
+          }
+        } else {
+          console.log("⚠️ ADVERTENCIA: (Solana) El archivo JSON tiene una clave diferente a process.env");
+          console.log(`   📋 JSON: ${jsonKey.substring(0, 10)}... (${jsonKey.length} chars)`);
+          console.log(`   📋 ENV:  ${process.env.SOLANA_PRIVATE_KEY.substring(0, 10)}... (${process.env.SOLANA_PRIVATE_KEY.length} chars)`);
         }
-      } else {
-        console.log("⚠️ ADVERTENCIA: El archivo JSON tiene una clave diferente a process.env");
-        console.log(`   📋 JSON: ${jsonKey.substring(0, 10)}... (${jsonKey.length} chars)`);
-        console.log(`   📋 ENV:  ${process.env.SOLANA_PRIVATE_KEY.substring(0, 10)}... (${process.env.SOLANA_PRIVATE_KEY.length} chars)`);
+      }
+    }
+
+    if (verifyEvm) {
+      const jsonWallet = characterConfig.settings?.secrets?.BNB_WALLET_ADDRESS;
+      const jsonPriv = characterConfig.settings?.secrets?.BNB_PRIVATE_KEY;
+
+      if (jsonWallet && process.env.BNB_WALLET_ADDRESS) {
+        if (jsonWallet === process.env.BNB_WALLET_ADDRESS) {
+          console.log("✅ VERIFICACIÓN FINAL: (EVM/BNB) BNB_WALLET_ADDRESS en JSON coincide con process.env");
+        } else {
+          console.log("⚠️ ADVERTENCIA: (EVM/BNB) BNB_WALLET_ADDRESS en JSON no coincide con process.env");
+        }
+      }
+
+      if (jsonPriv && process.env.BNB_PRIVATE_KEY) {
+        if (jsonPriv === process.env.BNB_PRIVATE_KEY) {
+          console.log("✅ VERIFICACIÓN FINAL: (EVM/BNB) BNB_PRIVATE_KEY en JSON coincide con process.env");
+        } else {
+          console.log("⚠️ ADVERTENCIA: (EVM/BNB) BNB_PRIVATE_KEY en JSON no coincide con process.env");
+        }
       }
     }
   } catch (verifyError) {
@@ -964,6 +1168,10 @@ console.log("\n");
   console.log(`   OPENAI_MODEL: ${process.env.OPENAI_MODEL || 'NO CONFIGURADA'} ⚠️ ESTE DEBE SER EL MODELO QUE ELIZAOS USARÁ`);
   console.log(`   OPENAI_LARGE_MODEL: ${process.env.OPENAI_LARGE_MODEL || 'NO CONFIGURADA'} ⚠️ ElizaOS puede leer desde aquí`);
   console.log(`   OPENAI_SMALL_MODEL: ${process.env.OPENAI_SMALL_MODEL || 'NO CONFIGURADA'} ⚠️ ElizaOS puede leer desde aquí`);
+  console.log(`   BNB_RPC_URL: ${process.env.BNB_RPC_URL || 'NO CONFIGURADA'}`);
+  console.log(`   BNB_WALLET_ADDRESS: ${process.env.BNB_WALLET_ADDRESS || 'NO CONFIGURADA'}`);
+  console.log(`   BNB_PRIVATE_KEY: ${process.env.BNB_PRIVATE_KEY ? process.env.BNB_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.BNB_PRIVATE_KEY.length} chars)` : 'NO CONFIGURADA'}`);
+  console.log(`   DEXSCREENER_API_KEY: ${process.env.DEXSCREENER_API_KEY ? process.env.DEXSCREENER_API_KEY.substring(0, 8) + '...' : 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_PRIVATE_KEY: ${process.env.SOLANA_PRIVATE_KEY ? process.env.SOLANA_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_PRIVATE_KEY.length} chars)` : 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_WALLET_PRIVATE_KEY: ${process.env.SOLANA_WALLET_PRIVATE_KEY ? process.env.SOLANA_WALLET_PRIVATE_KEY.substring(0, 10) + '...' + ` (${process.env.SOLANA_WALLET_PRIVATE_KEY.length} chars) - Alternativa soportada` : 'NO CONFIGURADA'}`);
   console.log(`   SOLANA_PUBLIC_KEY: ${process.env.SOLANA_PUBLIC_KEY || 'NO CONFIGURADA'}`);
@@ -975,12 +1183,13 @@ console.log("\n");
   // Pasar las variables de entorno actualizadas (incluyendo SOLANA_PRIVATE_KEY convertida)
   // Usar el personaje seleccionado mediante variable de entorno
   // Normalizar el nombre del personaje: remover .json si está presente
-  let finalCharacterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'amica-agent';
+  let finalCharacterNameRaw = process.env.ELIZA_CHARACTER_NAME || 'niya-agent';
   const finalCharacterName = finalCharacterNameRaw.endsWith('.json') 
     ? finalCharacterNameRaw.slice(0, -5) 
     : finalCharacterNameRaw;
-  const finalCharacterFilePath = `./characters/${finalCharacterName}.json`;
-  console.log(`🚀 Iniciando ElizaOS con personaje: ${finalCharacterName}`);
+  const normalizedFinalCharacterName = finalCharacterName === 'nyako-agent' ? 'niya-agent' : finalCharacterName;
+  const finalCharacterFilePath = `./characters/${normalizedFinalCharacterName}.json`;
+  console.log(`🚀 Iniciando ElizaOS con personaje: ${normalizedFinalCharacterName}`);
   const elizaosProcess = spawn('npx', ['-y', 'elizaos', 'start', '--character', finalCharacterFilePath], {
     stdio: 'inherit', // Heredar stdin, stdout, stderr
     env: process.env,  // Pasar todas las variables de entorno (incluyendo SOLANA_PRIVATE_KEY actualizada)
